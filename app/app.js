@@ -261,6 +261,7 @@ function topBar(title, withBack) {
     <button class="ic" data-act="mode" aria-label="${mLab}" title="${mLab}">${mIcon}</button></header>`;
 }
 function fresh() {
+  if (!D) return '';
   const h = (Date.now() - new Date(D.updated)) / 36e5, ok = DEMO || h < 30;
   const txt = (ok ? 'Datos al día' : 'Datos sin actualizar') + ' · ' + updatedTxt().replace('Estadísticas: ', '');
   return `<span class="fresh ${ok ? '' : 'old'}" title="${esc(txt)}" aria-label="${esc(txt)}"><i></i>${ok ? 'Al día' : 'Sin actualizar'}</span>`;
@@ -271,7 +272,7 @@ function tabBar() {
   const root = { hoy: 'hoy', game: 'hoy', player: 'hoy', props: 'props', slip: 'slip', bets: 'bets', admin: 'admin' }[S.view];
   return `<div class="tabbar"><nav>${t.map(([v, l, i]) => `<button data-nav="${v}" ${root === v ? 'aria-current="page"' : ''}>${i}${l}${v === 'slip' && slip.length ? `<span class="badge">${slip.length}</span>` : ''}</button>`).join('')}</nav></div>`;
 }
-const legal = () => `<footer class="legal">Estimaciones a partir de partidos pasados; no garantizan nada. +18 · Juega solo lo que puedas permitirte perder.${DEMO ? '<br>Modo demostración: estadísticas y cuotas simuladas.' : ''}</footer>`;
+const legal = () => `<footer class="legal">Estimaciones a partir de partidos pasados; no garantizan nada. +18 · Juega solo lo que puedas permitirte perder.${DEMO ? '<br>Modo demostración: estadísticas y cuotas simuladas.' : `<div class="acct">Sesión: <b>${esc(userEmail)}</b>${isAdmin ? ' · administrador' : ''} · <button class="linkb" data-act="logout">Cerrar sesión</button></div>`}</footer>`;
 const updatedTxt = () => { const d = new Date(D.updated); return isNaN(d) ? '' : 'Estadísticas: ' + d.toLocaleString('es-ES', { timeZone: 'Europe/Rome', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); };
 
 /* ---------- vista: hoy ---------- */
@@ -620,7 +621,7 @@ function viewLogin(msg) {
   return `${topBar('', false)}<div class="login"><div class="card pad stack">
     <h1>Tribuna<span class="hi">.</span></h1><p class="mut" style="margin:0">Estadísticas NBA para el grupo. Entra con tu correo: te llegará un enlace para acceder sin contraseña.</p>
     <form id="login" class="stack"><label for="email" class="sm" style="font-weight:700">Correo</label><input id="email" class="field" type="email" required autocomplete="email" placeholder="tu@correo.com"><button class="btn" type="submit">Enviarme el enlace</button></form>
-    ${msg ? `<div class="sm">${esc(msg)}</div>` : ''}<p class="note" style="margin:0">Solo pueden entrar las personas invitadas por el administrador. +18.</p></div></div>`;
+    ${msg ? `<div class="sm">${esc(msg)}</div>` : ''}<p class="note" style="margin:0">Solo pueden entrar las personas invitadas por el administrador. Tus apuestas y tu boleto son privados: solo los ves tú. +18.</p></div></div>`;
 }
 
 /* ---------- mis apuestas: registro, directo, calendario y gráfico ---------- */
@@ -934,6 +935,7 @@ app.addEventListener('click', async e => {
   if (act === 'save-fondo') return saveFondo();
   if (act === 'add-ml') { const g = D.games.find(x => x.id === S.gameId), tm = S.mTeam === 'home' ? g.home : g.away, ev = marketEval(g, 'ml', tm, 'over', 0);
     slip = slip.filter(l => !(l.type === 'g' && l.gameId === g.id && l.market === 'ml')); slip.push({ type: 'g', gameId: g.id, market: 'ml', team: tm, side: 'over', line: 0, odd: ev.eo.v }); saveUser(); return render(); }
+  if (act === 'logout') { await sb.auth.signOut(); D = null; BETS = []; location.reload(); return; }
   if (act === 'sim-live') { simulateLive(); return render(); }
   if (act === 'clear-slip') { slip = []; saveUser(); return render(); }
   if (act === 'example') { S.draft = 'Curry 3PM 4,5 1,85 1,95\nJokic PRA 52,5 1,90 1,90\nBrunson puntos 26,5 1,83 1,97\nTatum;REB;8.5;2.05;1.75\nOKC ganador 1,55\nDEN ganador 2,45\nOKC handicap -4,5 1,90\nDEN@OKC total 229,5 1,90 1,90\nLAL puntos 116,5 1,88 1,92\nWembanyama PTS 24,5 1,90 1,90'; S.msg = ''; return render(); }
