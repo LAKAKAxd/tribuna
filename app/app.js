@@ -153,6 +153,27 @@ function impliedProb(key, side, eo) {
   if (eo.src === 'hoy' && o && o.over > 1 && o.under > 1) { const a = 1 / o.over, b = 1 / o.under; return (side === 'over' ? a : b) / (a + b); }
   return 1 / eo.v;
 }
+/* Probabilidad de un prop (calibrada el 16-nov-2026 con ~17.000 partidos de jugador).
+   El % de L5/L10 es muy ruidoso: cuando L10 dice 80 %, en la realidad sale ~60 %.
+   Aquí se usan sus últimos 40 partidos (10+ min), pesando más los recientes (vida media 10 partidos),
+   y se suaviza la distribución para no depender de si cayó justo por encima o por debajo de la línea. */
+function propProb(p, k, line, side = 'over') {
+  const PROPC = (D.propc ||= {}), ck = p.id + '|' + k + '|' + line;
+  if (PROPC[ck] === undefined) {
+    const L = p.log.filter(g => g.min >= 10).slice(-40), n = L.length;
+    if (n < 5) PROPC[ck] = null;
+    else {
+      const v = L.map(g => val(g, k)), w = v.map((_, j) => Math.pow(.5, (n - 1 - j) / 10)), W = w.reduce((a, b) => a + b, 0);
+      if (k === 'dd' || k === 'td') PROPC[ck] = (v.reduce((a, x, j) => a + w[j] * (x > line), 0) + .5) / (W + 1);
+      else {
+        const mu = v.reduce((a, x, j) => a + w[j] * x, 0) / W, sd = Math.sqrt(v.reduce((a, x, j) => a + w[j] * (x - mu) ** 2, 0) / W) + .5;
+        const h = .5 * sd * Math.pow(n, -.2) + .3;
+        PROPC[ck] = v.reduce((a, x, j) => a + w[j] * (1 - Phi((line - x) / h)), 0) / W;
+      }
+    }
+  }
+  const pr = PROPC[ck]; return pr == null ? null : side === 'over' ? pr : 1 - pr;
+}
 function filtered(p) { return p.log.filter(g => (S.venue === 'all' || (S.venue === 'home') === g.home) && g.min >= S.minMin && (S.rest === 'all' || (S.rest === '2' ? g.rest >= 2 : g.rest === +S.rest))); }
 function windowGames(p, w, base) {
   const g = base ?? filtered(p), opp = oppOf(p.team);
@@ -169,13 +190,43 @@ function verdict(edge) { if (edge == null) return ''; const c = edge >= 3 ? 'goo
 /* ---------- equipos y partidos ---------- */
 function tGames(t, venue = 'all') { return (D.teams[t] || []).filter(g => venue === 'all' || (venue === 'home') === g.home); }
 function record(t, season, venue = 'all') { const g = tGames(t, venue).filter(x => x.season === season); const w = g.filter(x => x.margin > 0).length; return `${w}-${g.length - w}`; }
-function model(g) {
-  const split = (t, v) => { const L = tGames(t, v).slice(-20); const all = tGames(t).slice(-20); const use = L.length >= 6 ? L : all; return { pf: mean(use.map(x => x.pts)), pa: mean(use.map(x => x.opp_pts)) }; };
-  const H = split(g.home, 'home'), A = split(g.away, 'away');
-  const eh = (H.pf + A.pa) / 2, ea = (A.pf + H.pa) / 2;
-  return { eh, ea, m: eh - ea, total: eh + ea, pHome: Phi((eh - ea) / 12) };
+/* Modelo de partido (calibrado el 16-nov-2026 con 1.400 partidos de 2025-26 y 2026-27):
+   regresión ridge de puntos = media + ataque del equipo + defensa del rival + ventaja de campo.
+   Tiene en cuenta contra quién se jugó cada partido. La temporada anterior pesa 0,3 y la actual 1;
+   la media de puntos de la temporada actual tiene su propio ajuste (este año se anota más). */
+const RIDGE = { lam: 5, prevW: .3, curMuPen: 3 };
+function ratings() {
+  if (D.ratings) return D.ratings;
+  const T = Object.keys(D.teams).sort(), n = T.length, ix = Object.fromEntries(T.map((t, i) => [t, i])), N = 2 * n + 3;
+  const A = Array.from({ length: N }, () => new Float64Array(N)), b = new Float64Array(N);
+  const add = (cols, y, w) => { for (const i of cols) { b[i] += w * y; for (const j of cols) A[i][j] += w; } };
+  for (const [t, arr] of Object.entries(D.teams)) for (const x of arr) {
+    if (!x.home || ix[x.opp] == null) continue;
+    const w = x.season === D.cur ? 1 : RIDGE.prevW, cur = x.season === D.cur ? [2 * n + 2] : [];
+    add([ix[t], n + ix[x.opp], 2 * n, 2 * n + 1, ...cur], x.pts, w);
+    add([ix[x.opp], n + ix[t], 2 * n, ...cur], x.opp_pts, w);
+  }
+  for (let i = 0; i < 2 * n; i++) A[i][i] += RIDGE.lam;
+  A[2 * n][2 * n] += 1e-4; A[2 * n + 1][2 * n + 1] += 1e-4; A[2 * n + 2][2 * n + 2] += RIDGE.curMuPen;
+  for (let c = 0; c < N; c++) {               // Gauss-Jordan (matriz simétrica definida positiva)
+    let piv = c; for (let r = c + 1; r < N; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    [A[c], A[piv]] = [A[piv], A[c]]; [b[c], b[piv]] = [b[piv], b[c]];
+    for (let r = 0; r < N; r++) { if (r === c || !A[r][c]) continue; const f = A[r][c] / A[c][c]; for (let k = c; k < N; k++) A[r][k] -= f * A[c][k]; b[r] -= f * b[c]; }
+  }
+  const x = Array.from(b, (v, i) => v / A[i][i]);
+  return (D.ratings = { ix, off: t => x[ix[t]] ?? 0, def: t => x[n + ix[t]] ?? 0, mu: x[2 * n] + x[2 * n + 2], hca: x[2 * n + 1] });
 }
-const SD = { ml: 12, spread: 12, total: 17, pts: 11 };
+function model(g) {
+  const R = ratings();
+  const eh = R.mu + R.hca + R.off(g.home) + R.def(g.away), ea = R.mu + R.off(g.away) + R.def(g.home);
+  return { eh, ea, m: eh - ea, total: eh + ea, pHome: Phi((eh - ea) / SD.ml) };
+}
+/* Desviaciones ajustadas con los partidos ya jugados (probabilidad = normal con esta desviación). */
+const SD = { ml: 12, spread: 13, total: 18, pts: 12 };
+/* El modelo no sabe de lesiones ni descansos y el mercado sí: para el "valor" se mezcla 50/50
+   la probabilidad del modelo con la de la cuota. Así no salen ventajas grandes falsas. */
+const MKT_W = .5;
+const edgeOf = (p, imp) => imp == null || p == null ? null : (1 - MKT_W) * (p - imp) * 100;
 function marketKey(g, market, team) { return market === 'total' ? 'G:' + gameKey(g) + '|total' : 'T:' + team + '|' + market; }
 function marketLine(g, market, team) {
   const key = marketKey(g, market, team);
@@ -216,7 +267,7 @@ function marketEval(g, market, team, side, line) {
     else if (market === 'spread') imp = 1 / eo.v;
     else imp = impliedProb(key, odSide, eo);
   }
-  return { pModel, hist, key, eo, imp, edge: imp != null ? (pModel - imp) * 100 : null, histVal, thr };
+  return { pModel, hist, key, eo, imp, edge: edgeOf(pModel, imp), histVal, thr };
 }
 function marketLabel(g, market, team, side, line) {
   if (market === 'ml') return `Gana ${team}`;
@@ -412,9 +463,9 @@ function teamSection(g, tm) {
     const hw = w => hit(windowGames(p, w, p.log), k, line);
     const l10 = hw('l10');
     let side, edge = null, eo = { v: null };
-    if (ODDS[key] && !yes) { const b = bestSide(hw(S.twin === 'dvp' ? 'l10' : S.twin).p, key, line); side = b.side; edge = b.edge; eo = b.eo; }
-    else side = yes ? 'over' : (l10.p ?? 0) >= .5 ? 'over' : 'under';
-    if (yes && ODDS[key]) { eo = effOdd(key, 'over', line); const imp = impliedProb(key, 'over', eo); edge = imp != null && l10.p != null ? (l10.p - imp) * 100 : null; }
+    if (ODDS[key] && !yes) { const b = bestSide(propProb(p, k, line), key, line); side = b.side; edge = b.edge; eo = b.eo; }
+    else side = yes ? 'over' : (propProb(p, k, line) ?? .5) >= .5 ? 'over' : 'under';
+    if (yes && ODDS[key]) { eo = effOdd(key, 'over', line); edge = edgeOf(propProb(p, k, line), impliedProb(key, 'over', eo)); }
     const per = {}; for (const [w] of PER) if (w !== 'dvp') { const h = hw(w); per[w] = { p: sideP(h, side), n: h.n }; }
     const rk = defRank(opp, p.pos, SK[k].base || k);
     per.dvp = { rk, score: rk == null ? 0 : side === 'over' ? rk / 30 : 1 - rk / 30 };
@@ -451,7 +502,7 @@ function viewPlayer() {
   const p = D.players[S.pid]; if (!p) { S.view = 'hoy'; return viewHoy(); }
   const k = S.stat, key = lineKey(p.id, k), line = getLine(p, k), side = getSide(key), opp = oppOf(p.team), g = gameOfTeam(p.team);
   const base = filtered(p), games = windowGames(p, S.win, base), vals = games.map(x => val(x, k)), h = hit(games, k, line), ph = sideP(h, side);
-  const eo = effOdd(key, side, line), imp = impliedProb(key, side, eo), edge = imp != null && ph != null ? (ph - imp) * 100 : null;
+  const eo = effOdd(key, side, line), imp = impliedProb(key, side, eo), pm = propProb(p, k, line, side), edge = edgeOf(pm, imp);
   const defR = opp ? defRank(opp, p.pos, SK[k].base || k) : null;
   const gradeL = (() => { const s = (sideP(hit(windowGames(p, 'l10'), k, line), side) ?? .5) * .65 + ((defR || 15) / 30) * .35; return ['D', 'C-', 'C', 'C+', 'B-', 'B', 'B+', 'A-', 'A', 'A+'][Math.max(0, Math.min(9, Math.floor(s * 10)))]; })();
   const o = ODDS[key], t = g ? etToRome(g.date, g.status) : null;
@@ -470,7 +521,7 @@ function viewPlayer() {
         <div class="ctl"><span class="mut sm">Cuota</span><input id="podd" type="number" step="0.01" min="1.01" placeholder="1,85" value="${eo.v ?? ''}" inputmode="decimal" aria-label="Cuota"></div>
       </div>
       <div class="pick" style="padding-top:0"><div class="big">${side === 'over' ? 'Más' : 'Menos'} de ${dec(line)} <span class="mut" style="font-weight:600;font-size:15px">${esc(SK[k].n.toLowerCase())}</span></div>${verdict(edge)}</div>
-      <div class="pick" style="padding-top:0"><span class="sm mut">${o ? `Línea de hoy ${dec(o.line)}${o.over ? ' · más ' + dec(o.over, 2) : ''}${o.under ? ' · menos ' + dec(o.under, 2) : ''}` : 'Sin cuota cargada hoy: línea = mediana de L20'}${imp != null ? ` · La cuota le da <b>${pct(imp)}</b>, el histórico <b>${pct(ph)}</b>` : ''}</span>
+      <div class="pick" style="padding-top:0"><span class="sm mut">${o ? `Línea de hoy ${dec(o.line)}${o.over ? ' · más ' + dec(o.over, 2) : ''}${o.under ? ' · menos ' + dec(o.under, 2) : ''}` : 'Sin cuota cargada hoy: línea = mediana de L20'}${imp != null ? ` · La cuota le da <b>${pct(imp)}</b>, el modelo <b>${pct(pm)}</b> (este tramo ${pct(ph)})` : ''}</span>
         ${uLines[key] != null ? `<button class="linkb" data-act="reset-line">Usar la línea de hoy (${dec(autoLine(p, k))})</button>` : ''}${eo.src === 'tuya' ? `<button class="linkb" data-act="reset-odd">Usar la cuota de hoy</button>` : ''}
         <button class="btn ghost" data-act="add-player" style="margin-left:auto">+ Combinada</button></div>
       <div class="chartbox">${chart(items, line, { label: SK[k].n })}</div>
@@ -495,7 +546,7 @@ function bestSide(hp, key, line) {
   let best = null;
   for (const side of ['over', 'under']) {
     const eo = effOdd(key, side, line); const imp = impliedProb(key, side, eo); const p = side === 'over' ? hp : hp == null ? null : 1 - hp;
-    const edge = imp != null && p != null ? (p - imp) * 100 : null;
+    const edge = edgeOf(p, imp);
     if (!best || (edge ?? -999) > (best.edge ?? -999)) best = { side, eo, imp, p, edge };
   }
   return best;
@@ -507,7 +558,7 @@ function propRows(tab, stat, win) {
     for (const [key, o] of Object.entries(ODDS)) {
       const [pid, k] = key.split('|'); const p = D.players[pid]; if (!p || !SK[k] || !playing.has(p.team)) continue;
       if (stat !== 'all' && stat !== k) continue;
-      const g = windowGames(p, win, p.log), line = getLine(p, k), h = hit(g, k, line), b = bestSide(h.p, key, line);
+      const g = windowGames(p, win, p.log), line = getLine(p, k), h = hit(g, k, line), b = bestSide(propProb(p, k, line), key, line);
       rows.push({ type: 'p', p, k, line, h, b, spark: g.slice(-10).map(x => val(x, k)) });
     }
   } else {
@@ -543,7 +594,7 @@ function viewProps() {
 
 /* ---------- vista: combinada ---------- */
 function legEval(l) {
-  if (l.type === 'p') { const p = D.players[l.pid]; if (!p) return null; const h = hit(windowGames(p, 'l10', p.log), l.stat, l.line); return { p: sideP(h, l.side), label: `${p.name} · ${l.side === 'over' ? 'más' : 'menos'} de ${dec(l.line)} ${SK[l.stat].l}`, src: 'L10' }; }
+  if (l.type === 'p') { const p = D.players[l.pid]; if (!p) return null; return { p: propProb(p, l.stat, l.line, l.side), label: `${p.name} · ${l.side === 'over' ? 'más' : 'menos'} de ${dec(l.line)} ${SK[l.stat].l}`, src: 'modelo' }; }
   const g = D.games.find(x => x.id === l.gameId); if (!g) return null; const ev = marketEval(g, l.market, l.team, l.side, l.line);
   return { p: ev.pModel, label: `${marketLabel(g, l.market, l.team, l.side, l.line)} (${g.away} @ ${g.home})`, src: 'modelo' };
 }
