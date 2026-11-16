@@ -214,12 +214,15 @@ function ratings() {
   if (D.ratings) return D.ratings;
   const T = Object.keys(D.teams).sort(), n = T.length, ix = Object.fromEntries(T.map((t, i) => [t, i])), N = 2 * n + 3;
   const A = Array.from({ length: N }, () => new Float64Array(N)), b = new Float64Array(N);
+  const AB = absenceSums();
   const add = (cols, y, w) => { for (const i of cols) { b[i] += w * y; for (const j of cols) A[i][j] += w; } };
   for (const [t, arr] of Object.entries(D.teams)) for (const x of arr) {
     if (!x.home || ix[x.opp] == null) continue;
     const w = x.season === D.cur ? 1 : RIDGE.prevW, cur = x.season === D.cur ? [2 * n + 2] : [];
-    add([ix[t], n + ix[x.opp], 2 * n, 2 * n + 1, ...cur], x.pts, w);
-    add([ix[x.opp], n + ix[t], 2 * n, ...cur], x.opp_pts, w);
+    // Fuerza "con todos": se suma lo que valían los titulares que faltaron ese día (y se resta al rival).
+    const dm = IMPACT.coef / 2 * ((AB[t]?.[x.date] || 0) - (AB[x.opp]?.[x.date] || 0));
+    add([ix[t], n + ix[x.opp], 2 * n, 2 * n + 1, ...cur], x.pts + dm, w);
+    add([ix[x.opp], n + ix[t], 2 * n, ...cur], x.opp_pts - dm, w);
   }
   for (let i = 0; i < 2 * n; i++) A[i][i] += RIDGE.lam;
   A[2 * n][2 * n] += 1e-4; A[2 * n + 1][2 * n + 1] += 1e-4; A[2 * n + 2][2 * n + 2] += RIDGE.curMuPen;
@@ -234,7 +237,8 @@ function ratings() {
 /* ---------- bajas ----------
    Calibrado el 16-nov-2026 con los partidos ya jugados: por cada punto de "Game Score" por encima de un suplente
    (0,3 por minuto) que le falta a un equipo, pierde 0,29 puntos de diferencia. Un titular bueno suele valer 2-4 puntos.
-   Solo cuenta a quien jugó al menos 4 de los últimos 10 partidos del equipo: si lleva tiempo fuera, el modelo ya lo sabe. */
+   La fuerza de cada equipo se calcula "con todos" (cada partido pasado se corrige por quién faltó), así que
+   hoy se resta cualquier baja que haya jugado con el equipo en sus últimos 40 partidos. */
 const BAJA_W = { out: 1, doubtful: .8, questionable: .35, probable: 0 };
 const BAJA_N = { out: 'Baja', doubtful: 'Duda seria', questionable: 'Duda', probable: 'Probable' };
 const IMPACT = { coef: .29, repl: .3 };
@@ -243,11 +247,51 @@ function regular(p) {   // últimos 10 partidos del equipo y los que jugó él
   const T = tGames(p.team).slice(-10), dates = new Set(T.map(x => x.date)), mine = p.log.filter(x => dates.has(x.date));
   return { mine, n: T.length };
 }
-function playerImpact(p) {
-  const { mine } = regular(p); if (mine.length < 4) return 0;
-  const min = mean(mine.map(x => x.min)); if (min < 12) return 0;
-  return Math.max(0, mean(mine.map(gameScore)) - IMPACT.repl * min) * IMPACT.coef;
+/* Partidos de un jugador con su equipo actual: índice del partido del equipo -> fila del jugador. */
+function teamApps(p) {
+  const T = tGames(p.team), at = {}; T.forEach((x, i) => at[x.date] = i);
+  const a = new Map(); for (const g of p.log) { const i = at[g.date]; if (i != null && T[i].opp === g.opp) a.set(i, g); }
+  return a;
 }
+/* Lo que vale un jugador antes del partido i de su equipo (Game Score por encima de un suplente).
+   Cuenta si jugó con el equipo en los 40 partidos anteriores, 3+ veces y 12+ minutos de media. */
+function valueAt(a, i) {
+  const prev = [...a.keys()].filter(j => j < i && j >= i - 40).sort((x, y) => x - y).slice(-10).map(j => a.get(j));
+  if (prev.length < 3) return 0;
+  const min = mean(prev.map(x => x.min)); if (min < 12) return 0;
+  return Math.max(0, mean(prev.map(gameScore)) - IMPACT.repl * min);
+}
+/* Quién de la plantilla actual faltó en cada partido pasado y cuánto valía. */
+function absences() {
+  if (D.abs) return D.abs;
+  const abs = {};
+  for (const [t, T] of Object.entries(D.teams)) {
+    const apps = Object.values(D.players).filter(p => p.team === t).map(p => ({ p, a: teamApps(p) }));
+    abs[t] = {};
+    T.forEach((x, i) => {
+      const out = [];
+      for (const { p, a } of apps) { if (a.has(i)) continue; const v = valueAt(a, i); if (v > 0) out.push({ p, v }); }
+      if (out.length) abs[t][x.date] = out.sort((a, b) => b.v - a.v);
+    });
+  }
+  return (D.abs = abs);
+}
+function absenceSums() {
+  const A = absences(), S2 = {};
+  for (const [t, m] of Object.entries(A)) { S2[t] = {}; for (const [d, L] of Object.entries(m)) S2[t][d] = L.reduce((a, x) => a + x.v, 0); }
+  return S2;
+}
+/* Titulares que faltaron en un partido pasado (valían ~1 punto o más). */
+const missed = (t, date) => (absences()[t]?.[date] || []).filter(x => x.v * IMPACT.coef >= .9).map(x => x.p.name.split(' ').slice(-1)[0]);
+function withMissed(items, series, t) {
+  items.forEach((it, i) => { const m = missed(t, series[series.length - items.length + i].date); if (m.length) { it.flag = true; it.title += ' · sin ' + m.join(', '); } });
+  return items;
+}
+function missedNote(series, t) {
+  const L = series.slice(-25).map(x => ({ x, m: missed(t, x.date) })).filter(z => z.m.length).slice(-6).reverse();
+  return L.length ? `<div class="note" style="margin-top:6px"><span class="dotm"></span> Le faltaban titulares: ${L.map(({ x, m }) => `${fdate(x.d)} ${x.home ? 'vs' : '@'} ${x.opp} (sin ${esc(m.join(', '))})`).join(' · ')}</div>` : '';
+}
+function playerImpact(p) { return valueAt(teamApps(p), tGames(p.team).length) * IMPACT.coef; }
 const bajaOf = pid => BAJAS[pid] && BAJA_W[BAJAS[pid].status] != null ? BAJAS[pid] : null;
 function teamBajas(t) {
   return Object.values(D.players).filter(p => p.team === t && bajaOf(p.id)).map(p => { const b = bajaOf(p.id); return { p, b, w: BAJA_W[b.status], imp: playerImpact(p) }; })
@@ -333,6 +377,7 @@ function chart(items, line, o = {}) {
   items.forEach((it, i) => {
     const x = padL + i * slot + (slot - bw) / 2, ov = it.v > line, top = Math.min(y(it.v), y(base)), h = Math.max(2, Math.abs(y(base) - y(it.v)));
     s += `<rect x="${x}" y="${top}" width="${bw}" height="${h}" rx="${Math.min(6, bw / 3)}" fill="${ov ? 'var(--over)' : 'var(--under)'}"><title>${esc(it.title || '')}</title></rect>`;
+    if (it.flag) s += `<circle cx="${x + bw / 2}" cy="7" r="3.5" fill="var(--bad)"><title>${esc(it.title || '')}</title></circle>`;
     if (bw >= 16) s += `<text x="${x + bw / 2}" y="${it.v >= base ? top - 5 : top + h + 12}" text-anchor="middle" font-size="11" font-weight="700" fill="${ov ? 'var(--over)' : 'var(--mut)'}">${esc(it.lab ?? it.v)}</text>`;
     if (slot >= 24 || i % Math.ceil(24 / slot) === 0) s += `<text x="${x + bw / 2}" y="${H - 19}" text-anchor="middle" font-size="9.5" fill="var(--mut)">${esc(it.d1)}</text><text x="${x + bw / 2}" y="${H - 7}" text-anchor="middle" font-size="9.5" fill="var(--mut)">${esc(it.d2)}</text>`;
   });
@@ -447,7 +492,7 @@ function gameSection(g, md) {
   let base = tGames(tm, S.gvenue);
   const series = n === 'h2h' ? base.filter(x => x.opp === opp) : n === 'cur' ? base.filter(x => x.season === D.cur) : base.slice(-n);
   const wins = series.filter(x => x.margin > 0).length;
-  const items = series.slice(-25).map(x => ({ v: x.margin, lab: (x.margin > 0 ? '+' : '') + x.margin, d1: fdate(x.d), d2: (x.home ? '' : '@') + x.opp, title: `${fdate(x.d)} ${x.home ? 'vs' : '@'} ${x.opp}: ${x.pts}-${x.opp_pts}` }));
+  const items = series.slice(-25).map(x => ({ v: x.margin, lab: (x.margin > 0 ? '+' : '') + x.margin, d1: fdate(x.d), d2: (x.home ? '' : '@') + x.opp, title: `${fdate(x.d)} ${x.home ? 'vs' : '@'} ${x.opp}: ${x.pts}-${x.opp_pts}` })); withMissed(items, series.slice(-25), tm);
   const evSel = evs.find(x => x.tm === tm).ev;
   const facts = teamFacts(g, tm);
   const other = ['spread', 'total', 'pts'];
@@ -467,7 +512,7 @@ function gameSection(g, md) {
         <button class="btn ghost" data-act="add-ml" style="margin-left:auto">+ Combinada</button>
       </div>
       <div class="chartbox">${chart(items, 0, { label: 'Diferencia de puntos', lineLab: '0' })}</div>
-      <div class="pad" style="padding-top:0"><div class="note">Diferencia de puntos de ${tm} en cada partido${S.gvenue !== 'all' ? (S.gvenue === 'home' ? ' en casa' : ' fuera') : ''}. Por encima de 0 = ganó. Pulsa una barra para ver el marcador.</div></div>
+      <div class="pad" style="padding-top:0"><div class="note">Diferencia de puntos de ${tm} en cada partido${S.gvenue !== 'all' ? (S.gvenue === 'home' ? ' en casa' : ' fuera') : ''}. Por encima de 0 = ganó. Pulsa una barra para ver el marcador.</div>${missedNote(series, tm)}</div>
     </div>
     ${bajasCard(g)}
     <div class="card pad"><h3>Detalles que pueden cambiarlo todo</h3><ul class="facts-list">${facts.map(([c, txt]) => `<li class="${c}">${esc(txt)}</li>`).join('')}</ul></div>
@@ -486,7 +531,7 @@ function marketCard(g) {
   const src = S.market === 'total' ? g.home : team, opp = src === g.home ? g.away : g.home;
   const series = nSel === 'h2h' ? tGames(src).filter(x => x.opp === opp) : nSel === 'cur' ? tGames(src).filter(x => x.season === D.cur) : tGames(src).slice(-nSel);
   const items = series.slice(-25).map(x => ({ v: S.market === 'spread' ? x.margin : S.market === 'total' ? x.total : x.pts, d1: fdate(x.d), d2: (x.home ? '' : '@') + x.opp, title: `${fdate(x.d)} ${x.home ? 'vs' : '@'} ${x.opp}: ${x.pts}-${x.opp_pts}` }));
-  items.forEach(i => { if (S.market === 'spread') i.lab = (i.v > 0 ? '+' : '') + i.v; });
+  items.forEach(i => { if (S.market === 'spread') i.lab = (i.v > 0 ? '+' : '') + i.v; }); withMissed(items, series.slice(-25), src);
   const cLine = S.market === 'spread' ? -line : line, h = ev.hist(nSel);
   return `<div class="card">
       <div class="pick">
@@ -499,7 +544,7 @@ function marketCard(g) {
         ${ev.eo.src === 'tuya' ? `<button class="linkb" data-act="reset-godd">Usar la cuota de hoy</button>` : ''}${uLines[ev.key] != null ? `<button class="linkb" data-act="reset-gline">Línea de hoy</button>` : ''}
         <button class="btn ghost" data-act="add-game" style="margin-left:auto">+ Combinada</button></div>
       <div class="chartbox">${chart(items, cLine, { min: S.market === 'spread' ? undefined : 'auto', label: MARKET_N[S.market], lineLab: S.market === 'spread' ? signed(-line) : dec(line) })}</div>
-      <div class="pad" style="padding-top:0"><div class="note">${S.market === 'spread' ? `Diferencia de puntos de ${team}. Cubre el ${signed(line)} si la barra supera ${signed(-line)}.` : S.market === 'total' ? 'Puntos totales en los partidos de ' + g.home + '.' : 'Puntos de ' + team + ' en cada partido.'}</div></div>
+      <div class="pad" style="padding-top:0"><div class="note">${S.market === 'spread' ? `Diferencia de puntos de ${team}. Cubre el ${signed(line)} si la barra supera ${signed(-line)}.` : S.market === 'total' ? 'Puntos totales en los partidos de ' + g.home + '.' : 'Puntos de ' + team + ' en cada partido.'}</div>${missedNote(series, src)}</div>
     </div>`;
 }
 
