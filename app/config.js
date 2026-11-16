@@ -2,8 +2,8 @@
    La "anon public key" se puede publicar: los permisos los controla la base de datos.
    Si los dejas vacíos, la app arranca en modo demostración con datos simulados. */
 window.TRIBUNA_CONFIG = {
-  supabaseUrl: '',
-  supabaseAnonKey: '',
+  supabaseUrl: 'https://ulfxhbkoabqfyljteyab.supabase.co',
+  supabaseAnonKey: 'sb_publishable_BJcJ4lvpenqIdjCcjxoOfg_FUsJtOdl',
 
   /* Escudos: false = escudos propios con los colores de cada equipo (se pueden publicar).
      true = logos oficiales de la NBA. Solo para uso privado: tienen derechos de marca. */

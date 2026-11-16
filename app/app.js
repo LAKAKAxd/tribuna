@@ -3,7 +3,7 @@
 (() => {
 'use strict';
 const CFG = window.TRIBUNA_CONFIG || {};
-const DEMO = !CFG.supabaseUrl || !CFG.supabaseAnonKey;
+const DEMO = !CFG.supabaseUrl || !CFG.supabaseAnonKey || /[?&]demo\b/.test(location.search);
 const app = document.getElementById('app');
 
 /* ---------- utilidades ---------- */
