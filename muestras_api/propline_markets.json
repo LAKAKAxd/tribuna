@@ -1,0 +1,158 @@
+{
+ "status": 200,
+ "headers": {
+  "x-daily-limit": "1000",
+  "x-daily-used": "2",
+  "x-daily-remaining": "998",
+  "x-daily-reset": "1794873600",
+  "ratelimit-limit": "1000",
+  "ratelimit-remaining": "998",
+  "ratelimit-reset": "3689",
+  "ratelimit-policy": "1000;w=86400",
+  "x-ratelimit-limit": "1000",
+  "x-ratelimit-remaining": "998",
+  "x-ratelimit-reset": "1794873600"
+ },
+ "body": [
+  {
+   "key": "bet_builder_boost",
+   "outcomes_count": 6
+  },
+  {
+   "key": "h2h",
+   "outcomes_count": 198
+  },
+  {
+   "key": "player_assists",
+   "outcomes_count": 2085
+  },
+  {
+   "key": "player_blocks",
+   "outcomes_count": 402
+  },
+  {
+   "key": "player_blocks_steals",
+   "outcomes_count": 342
+  },
+  {
+   "key": "player_defensive_rebounds",
+   "outcomes_count": 8
+  },
+  {
+   "key": "player_double_double",
+   "outcomes_count": 158
+  },
+  {
+   "key": "player_fantasy_score",
+   "outcomes_count": 94
+  },
+  {
+   "key": "player_field_goals_attempted",
+   "outcomes_count": 58
+  },
+  {
+   "key": "player_field_goals_made",
+   "outcomes_count": 42
+  },
+  {
+   "key": "player_first_basket",
+   "outcomes_count": 66
+  },
+  {
+   "key": "player_first_field_goal",
+   "outcomes_count": 19
+  },
+  {
+   "key": "player_free_throws_attempted",
+   "outcomes_count": 56
+  },
+  {
+   "key": "player_free_throws_made",
+   "outcomes_count": 56
+  },
+  {
+   "key": "player_offensive_rebounds",
+   "outcomes_count": 20
+  },
+  {
+   "key": "player_points",
+   "outcomes_count": 4235
+  },
+  {
+   "key": "player_points_10plus",
+   "outcomes_count": 13
+  },
+  {
+   "key": "player_points_15plus",
+   "outcomes_count": 14
+  },
+  {
+   "key": "player_points_assists",
+   "outcomes_count": 1670
+  },
+  {
+   "key": "player_points_rebounds",
+   "outcomes_count": 1838
+  },
+  {
+   "key": "player_points_rebounds_assists",
+   "outcomes_count": 2561
+  },
+  {
+   "key": "player_rebounds",
+   "outcomes_count": 2704
+  },
+  {
+   "key": "player_rebounds_assists",
+   "outcomes_count": 1383
+  },
+  {
+   "key": "player_steals",
+   "outcomes_count": 603
+  },
+  {
+   "key": "player_threes",
+   "outcomes_count": 1939
+  },
+  {
+   "key": "player_threes_attempted",
+   "outcomes_count": 102
+  },
+  {
+   "key": "player_triple_double",
+   "outcomes_count": 44
+  },
+  {
+   "key": "player_turnovers",
+   "outcomes_count": 159
+  },
+  {
+   "key": "player_twos_attempted",
+   "outcomes_count": 62
+  },
+  {
+   "key": "player_twos_made",
+   "outcomes_count": 66
+  },
+  {
+   "key": "spreads",
+   "outcomes_count": 3010
+  },
+  {
+   "key": "team_first_basket",
+   "outcomes_count": 2
+  },
+  {
+   "key": "team_first_field_goal",
+   "outcomes_count": 2
+  },
+  {
+   "key": "team_first_field_goal_scorer",
+   "outcomes_count": 20
+  },
+  {
+   "key": "totals",
+   "outcomes_count": 4966
+  }
+ ]
+}
