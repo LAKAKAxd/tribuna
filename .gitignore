@@ -1,0 +1,4 @@
+config.env
+nba.json
+*.log
+__pycache__/
