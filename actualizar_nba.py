@@ -151,13 +151,14 @@ def descargar(hoy_us: datetime) -> dict:
     print("Descargando partidos de hoy…")
     sb = con_reintentos(lambda: scoreboardv2.ScoreboardV2(
         game_date=hoy_us.strftime("%Y-%m-%d"), timeout=60).get_normalized_dict())
-    partidos = [{
+    # GameHeader a veces repite el mismo partido: nos quedamos con uno por GAME_ID.
+    partidos = list({g["GAME_ID"]: {
         "id": g["GAME_ID"],
         "home": abbr.get(g["HOME_TEAM_ID"], str(g["HOME_TEAM_ID"])),
         "away": abbr.get(g["VISITOR_TEAM_ID"], str(g["VISITOR_TEAM_ID"])),
         "status": g.get("GAME_STATUS_TEXT", "").strip(),   # p. ej. "7:30 pm ET"
         "date": hoy_us.strftime("%Y-%m-%d"),
-    } for g in sb.get("GameHeader", [])]
+    } for g in sb.get("GameHeader", [])}.values())
 
     return construir(jugadores, logs, partidos, actual, anterior, equipos)
 
