@@ -603,7 +603,7 @@ function parsePaste(text) {
 function viewAdmin() {
   const rows = S.draft ? parsePaste(S.draft) : [], ok = rows.filter(r => !r.err);
   return `${topBar('', false)}<div class="stack fade"><div><h1>Cuotas de hoy</h1><div class="mut sm">${(() => { const v = Object.values(ODDS), a = v.filter(o => o.src === 'auto').length; return `${v.length} cargadas${a ? ` (${a} automáticas, ${v.length - a} tuyas)` : ''}`; })()} · ${esc(updatedTxt())} · solo tú ves esta pestaña</div></div>
-    ${oddsCredits ? `<div class="card pad row-between"><div><b>Cuotas automáticas</b><div class="note">Se actualizan solas a las 18:00 y a las 23:00. Las que pegues aquí tienen prioridad y el script no las toca.</div></div><div style="text-align:right"><b class="${oddsCredits.restantes < 60 ? 'err' : 'hi'}" style="font-size:20px">${oddsCredits.restantes ?? '–'}</b><div class="xs mut">créditos este mes</div></div></div>` : ''}
+    ${oddsCredits ? `<div class="card pad row-between"><div><b>Cuotas automáticas</b><div class="note">Se actualizan solas a las 18:00 y a las 21:00. Las que pegues aquí tienen prioridad y el script no las toca.</div></div><div style="text-align:right"><b class="${oddsCredits.restantes < 60 ? 'err' : 'hi'}" style="font-size:20px">${oddsCredits.restantes ?? '–'}</b><div class="xs mut">créditos este mes</div></div></div>` : ''}
     <div class="card pad stack">
       <label for="paste" class="sm" style="font-weight:700">Pega una línea por apuesta</label>
       <textarea id="paste" spellcheck="false" placeholder="Curry 3PM 4,5 1,85 1,95&#10;Jokic PRA 52,5 1,90 1,90&#10;OKC ganador 1,55&#10;OKC handicap -4,5 1,90&#10;DEN@OKC total 229,5 1,90 1,90&#10;OKC puntos 117,5 1,88 1,92">${esc(S.draft)}</textarea>

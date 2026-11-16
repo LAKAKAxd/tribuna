@@ -7,7 +7,7 @@ Uso (en el PC del administrador, después de actualizar_nba.py):
 
 Reparto pensado para que los créditos duren todo el mes:
   - 18:00 (Italia): solo partidos.                       ~3 créditos
-  - 23:00 (Italia): partidos + props (las casas ya las han publicado).
+  - 21:00 (Italia): partidos + props (las casas ya las han publicado).
     Las props se reparten con lo que sobra: primero puntos en todos los partidos,
     luego triples, rebotes, asistencias y P+R+A si hay margen. Nunca toca la reserva
     que hace falta para los partidos de los días que quedan del mes.
