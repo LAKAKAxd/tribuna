@@ -602,7 +602,8 @@ function parsePaste(text) {
 }
 function viewAdmin() {
   const rows = S.draft ? parsePaste(S.draft) : [], ok = rows.filter(r => !r.err);
-  return `${topBar('', false)}<div class="stack fade"><div><h1>Cuotas de hoy</h1><div class="mut sm">${Object.keys(ODDS).length} cargadas · ${esc(updatedTxt())} · solo tú ves esta pestaña</div></div>
+  return `${topBar('', false)}<div class="stack fade"><div><h1>Cuotas de hoy</h1><div class="mut sm">${(() => { const v = Object.values(ODDS), a = v.filter(o => o.src === 'auto').length; return `${v.length} cargadas${a ? ` (${a} automáticas, ${v.length - a} tuyas)` : ''}`; })()} · ${esc(updatedTxt())} · solo tú ves esta pestaña</div></div>
+    ${oddsCredits ? `<div class="card pad row-between"><div><b>Cuotas automáticas</b><div class="note">Se actualizan solas a las 13:00 y a las 21:00. Las que pegues aquí tienen prioridad y el script no las toca.</div></div><div style="text-align:right"><b class="${oddsCredits.restantes < 60 ? 'err' : 'hi'}" style="font-size:20px">${oddsCredits.restantes ?? '–'}</b><div class="xs mut">créditos este mes</div></div></div>` : ''}
     <div class="card pad stack">
       <label for="paste" class="sm" style="font-weight:700">Pega una línea por apuesta</label>
       <textarea id="paste" spellcheck="false" placeholder="Curry 3PM 4,5 1,85 1,95&#10;Jokic PRA 52,5 1,90 1,90&#10;OKC ganador 1,55&#10;OKC handicap -4,5 1,90&#10;DEN@OKC total 229,5 1,90 1,90&#10;OKC puntos 117,5 1,88 1,92">${esc(S.draft)}</textarea>
@@ -1030,7 +1031,9 @@ async function saveOdds() {
     if (DEMO) { rows.forEach(r => ODDS[r.entity + '|' + r.stat] = { line: r.line, over: r.over, under: r.under }); store.set('demo-odds', ODDS); }
     else {
       const gd = D.games[0]?.date || todayET();
-      const { error } = await sb.from('odds').upsert(rows.map(r => ({ player_id: r.entity, stat: r.stat, line: r.line ?? 0, over_odd: r.over, under_odd: r.under, game_date: gd, updated_at: new Date().toISOString() })), { onConflict: 'player_id,stat,game_date' });
+      const mk = withSrc => rows.map(r => ({ player_id: r.entity, stat: r.stat, line: r.line ?? 0, over_odd: r.over, under_odd: r.under, game_date: gd, updated_at: new Date().toISOString(), ...(withSrc ? { fuente: 'manual' } : {}) }));
+      let { error } = await sb.from('odds').upsert(mk(true), { onConflict: 'player_id,stat,game_date' });
+      if (error && /fuente/.test(error.message)) ({ error } = await sb.from('odds').upsert(mk(false), { onConflict: 'player_id,stat,game_date' }));
       if (error) throw error;
       rows.forEach(r => ODDS[r.entity + '|' + r.stat] = { line: r.line, over: r.over, under: r.under });
     }
@@ -1055,7 +1058,7 @@ async function boot() {
   if (booting) return; booting = true;
   try { return await bootReal(); } finally { booting = false; }
 }
-let booting = false, pendingCode = '', groupCode = null;
+let booting = false, pendingCode = '', groupCode = null, oddsCredits = null;
 async function bootReal() {
   sb = sb || window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
   const { data: { session } } = await sb.auth.getSession();
@@ -1075,7 +1078,8 @@ async function bootReal() {
   const ap = await sb.from('apuestas').select('data').order('created_at', { ascending: true });
   BETS = (ap.data || []).map(r => r.data); S.calMonth = refDay().slice(0, 7);
   if (BETS.some(b => !b.result)) startLive();
-  ODDS = {}; (od.data || []).forEach(r => ODDS[r.player_id + '|' + r.stat] = { line: r.line == null ? null : +r.line, over: r.over_odd == null ? null : +r.over_odd, under: r.under_odd == null ? null : +r.under_odd });
+  ODDS = {}; (od.data || []).forEach(r => ODDS[r.player_id + '|' + r.stat] = { line: r.line == null ? null : +r.line, over: r.over_odd == null ? null : +r.over_odd, under: r.under_odd == null ? null : +r.under_odd, src: r.fuente || 'manual', at: r.updated_at });
+  if (isAdmin) { const cr = await sb.from('ajustes').select('valor').eq('clave', 'creditos_odds').maybeSingle(); try { oddsCredits = cr.data ? JSON.parse(cr.data.valor) : null; } catch (e) { oddsCredits = null; } }
   render();
 }
 boot().catch(err => { app.innerHTML = `<div class="shell"><div class="card empty" style="margin-top:20vh"><b>Algo ha fallado</b>${esc(err.message || err)}</div></div>`; });
