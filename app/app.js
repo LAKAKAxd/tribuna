@@ -79,7 +79,7 @@ const ALIAS = { pts: 'pts', puntos: 'pts', points: 'pts', p: 'pts', reb: 'reb', 
   '3pm': 'fg3m', '3pt': 'fg3m', '3p': 'fg3m', triples: 'fg3m', threes: 'fg3m', '3pa': 'fg3a', 'triples-intentados': 'fg3a',
   pra: 'pra', 'p+r+a': 'pra', pr: 'pr', 'p+r': 'pr', pa: 'pa', 'p+a': 'pa', ra: 'ra', 'r+a': 'ra',
   rob: 'stl', stl: 'stl', robos: 'stl', steals: 'stl', tap: 'blk', blk: 'blk', tapones: 'blk', blocks: 'blk',
-  'rob+tap': 'sb', 'stl+blk': 'sb', sb: 'sb', per: 'tov', tov: 'tov', perdidas: 'tov', tc: 'fgm', fgm: 'fgm', tci: 'fga', fga: 'fga', tl: 'ftm', ftm: 'ftm', tli: 'fta', fta: 'fta' };
+  'rob+tap': 'sb', 'stl+blk': 'sb', sb: 'sb', per: 'tov', tov: 'tov', perdidas: 'tov', tc: 'fgm', fgm: 'fgm', tci: 'fga', fga: 'fga', tl: 'ftm', ftm: 'ftm', tli: 'fta', fta: 'fta', dd: 'dd', 'doble-doble': 'dd', 'dobledoble': 'dd', td: 'td', 'triple-doble': 'td', 'tripledoble': 'td' };
 const GAME_ALIAS = { ganador: 'ml', gana: 'ml', ml: 'ml', moneyline: 'ml', '1x2': 'ml', handicap: 'spread', hcp: 'spread', spread: 'spread', hand: 'spread',
   total: 'total', totales: 'total', puntos: 'pts', pts: 'pts', 'puntos-equipo': 'pts' };
 const MARKET_N = { ml: 'Ganador', spread: 'Hándicap', total: 'Total del partido', pts: 'Puntos del equipo' };
