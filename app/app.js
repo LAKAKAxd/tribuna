@@ -272,7 +272,8 @@ function tabBar() {
   const root = { hoy: 'hoy', game: 'hoy', player: 'hoy', props: 'props', slip: 'slip', bets: 'bets', admin: 'admin' }[S.view];
   return `<div class="tabbar"><nav>${t.map(([v, l, i]) => `<button data-nav="${v}" ${root === v ? 'aria-current="page"' : ''}>${i}${l}${v === 'slip' && slip.length ? `<span class="badge">${slip.length}</span>` : ''}</button>`).join('')}</nav></div>`;
 }
-const legal = () => `<footer class="legal">Estimaciones a partir de partidos pasados; no garantizan nada. +18 · Juega solo lo que puedas permitirte perder.${DEMO ? '<br>Modo demostración: estadísticas y cuotas simuladas.' : `<div class="acct">Sesión: <b>${esc(userEmail)}</b>${isAdmin ? ' · administrador' : ''} · <button class="linkb" data-act="logout">Cerrar sesión</button></div>`}</footer>`;
+const legal = () => `<footer class="legal">Estimaciones a partir de partidos pasados; no garantizan nada. +18 · Juega solo lo que puedas permitirte perder.${DEMO ? '<br>Modo demostración: estadísticas y cuotas simuladas.' : `<div class="acct">Sesión: <b>${esc(userEmail)}</b>${isAdmin ? ' · administrador' : ''} · <button class="linkb" data-act="logout">Cerrar sesión</button>
+  <details class="np"><summary>Cambiar mi contraseña</summary><form id="newpass"><input id="np" class="field" type="password" minlength="6" required autocomplete="new-password" placeholder="Nueva contraseña (mín. 6)" aria-label="Nueva contraseña"><button class="btn ghost sm-btn" type="submit">Guardar</button></form><div id="npmsg" class="sm"></div></details></div>`}</footer>`;
 const updatedTxt = () => { const d = new Date(D.updated); return isNaN(d) ? '' : 'Estadísticas: ' + d.toLocaleString('es-ES', { timeZone: 'Europe/Rome', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); };
 
 /* ---------- vista: hoy ---------- */
@@ -617,11 +618,13 @@ function viewAdmin() {
 }
 
 /* ---------- login ---------- */
-function viewLogin(msg) {
+function viewLogin(msg, email = '') {
   return `${topBar('', false)}<div class="login"><div class="card pad stack">
-    <h1>Tribuna<span class="hi">.</span></h1><p class="mut" style="margin:0">Estadísticas NBA para el grupo. Entra con tu correo: te llegará un enlace para acceder sin contraseña.</p>
-    <form id="login" class="stack"><label for="email" class="sm" style="font-weight:700">Correo</label><input id="email" class="field" type="email" required autocomplete="email" placeholder="tu@correo.com"><button class="btn" type="submit">Enviarme el enlace</button></form>
-    ${msg ? `<div class="sm">${esc(msg)}</div>` : ''}<p class="note" style="margin:0">Solo pueden entrar las personas invitadas por el administrador. Tus apuestas y tu boleto son privados: solo los ves tú. +18.</p></div></div>`;
+    <h1>Tribuna<span class="hi">.</span></h1><p class="mut" style="margin:0">Estadísticas NBA para el grupo. Entra con el correo y la contraseña que te dio el administrador.</p>
+    <form id="login" class="stack"><label for="email" class="sm" style="font-weight:700">Correo</label><input id="email" class="field" type="email" required autocomplete="username" placeholder="tu@correo.com" value="${esc(email)}">
+      <label for="pass" class="sm" style="font-weight:700">Contraseña</label><input id="pass" class="field" type="password" required minlength="6" autocomplete="current-password">
+      <button class="btn" type="submit">Entrar</button></form>
+    ${msg ? `<div class="sm err" role="alert">${esc(msg)}</div>` : ''}<p class="note" style="margin:0">Solo pueden entrar las personas invitadas por el administrador. Tus apuestas y tu boleto son privados: solo los ves tú. +18.</p></div></div>`;
 }
 
 /* ---------- mis apuestas: registro, directo, calendario y gráfico ---------- */
@@ -968,10 +971,15 @@ app.addEventListener('submit', async e => {
     BETS.push(b); slip = []; S.stake = ''; S.betOdd = ''; saveUser(); persistBets([b]); startLive();
     S.calDay = null; return go('bets');
   }
+  if (e.target.id === 'newpass') {
+    e.preventDefault(); const v = document.getElementById('np').value, out = document.getElementById('npmsg');
+    const { error } = await sb.auth.updateUser({ password: v }); out.textContent = error ? 'No se pudo cambiar: ' + error.message : 'Contraseña cambiada.'; if (!error) document.getElementById('np').value = ''; return;
+  }
   if (e.target.id !== 'login') return; e.preventDefault();
-  const email = document.getElementById('email').value.trim();
-  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href.split('#')[0], shouldCreateUser: false } });
-  app.innerHTML = `<div class="shell">${viewLogin(error ? 'No se pudo enviar: ' + (error.message.includes('Signups') || error.message.includes('not allowed') ? 'ese correo no está invitado.' : error.message) : 'Listo: revisa tu correo y abre el enlace en este dispositivo.')}</div>`;
+  const email = document.getElementById('email').value.trim(), btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Entrando…';
+  const { error } = await sb.auth.signInWithPassword({ email, password: document.getElementById('pass').value });
+  if (error) { app.innerHTML = `<div class="shell">${viewLogin(/invalid/i.test(error.message) ? 'Correo o contraseña incorrectos.' : 'No se pudo entrar: ' + error.message, email)}</div>`; return; }
+  if (!D) boot();
 });
 let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(render, 200); });
 
@@ -1015,9 +1023,13 @@ async function boot() {
     BETS = [...demoHistory(), ...store.get('bets', [])]; S.calMonth = refDay().slice(0, 7);
     return render();
   }
-  sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
+  if (booting) return; booting = true;
+  try { return await bootReal(); } finally { booting = false; }
+}
+let booting = false;
+async function bootReal() {
+  sb = sb || window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
   const { data: { session } } = await sb.auth.getSession();
-  sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_IN' && !D) boot(); });
   if (!session) { app.innerHTML = `<div class="shell">${viewLogin('')}</div>`; return; }
   userEmail = session.user.email || '';
   const [snap, adm] = await Promise.all([sb.from('snapshots').select('data').eq('id', 'nba').maybeSingle(), sb.from('admins').select('email').limit(1)]);

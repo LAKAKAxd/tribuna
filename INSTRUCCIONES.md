@@ -69,3 +69,10 @@ Nota: NBA.com no es una API oficial y puede cambiar o bloquear conexiones sin av
 - Cada usuario registra sus apuestas (simples o combinadas) desde el Boleto con importe y cuota. Se guardan en Supabase, tabla `apuestas` (incluida en `supabase.sql`): cada uno solo ve las suyas.
 - El seguimiento en vivo lee el marcador gratuito de NBA.com cada 30 segundos mientras la app está abierta. Si el navegador no deja leerlo directamente, la app usa la función `supabase/functions/nba-live/index.ts`: en Supabase > Edge Functions > Deploy a new function, llámala `nba-live` y pega ese código (gratis hasta 500.000 llamadas al mes).
 - Si nadie tiene la app abierta, las apuestas se cierran solas al día siguiente con los datos del script.
+
+### Dar acceso a un amigo (sin correos)
+El correo gratuito de Supabase solo envía unos 2 mensajes por hora, así que la app entra con correo + contraseña:
+1. Supabase > Authentication > Users > **Add user > Create new user**.
+2. Escribe su correo y una contraseña (mínimo 6 caracteres) y deja marcado **Auto Confirm User**.
+3. Pásale el correo y la contraseña. Dentro de la app puede cambiarla abajo, en «Cambiar mi contraseña».
+Para quitar a alguien: en esa misma lista, los tres puntos > Delete user.
