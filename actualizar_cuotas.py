@@ -499,6 +499,8 @@ def main() -> None:
     with open(ruta_nba, encoding="utf-8") as fh:
         nba = json.load(fh)
     partidos = nba.get("games") or []
+    from bajas import actualizar as actualizar_bajas
+    actualizar_bajas(nba, subir_a_supabase=not args.prueba)
     if not partidos:
         print("Hoy no hay partidos: no se consulta ninguna API.")
         return

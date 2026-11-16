@@ -89,6 +89,7 @@ const V = window.TRIBUNA_VISUAL;
 let FONDOS = Object.assign({}, CFG.fondos || {});
 let ANIM = true;
 let BETS = [];
+let BAJAS = {}, BAJAS_AT = null;   // id NBA -> { status: 'out'|'doubtful'|'questionable'|'probable', note, name, team }
 let D = null, ODDS = {}, sb = null, isAdmin = DEMO, userEmail = '';
 const S = { view: 'hoy', back: [], gameId: null, pid: null, stat: 'pts', win: 'l10', venue: 'all', minMin: 0, rest: 'all',
   market: 'ml', mTeam: 'home', gwin: 'l10', gtab: 'game', gvenue: 'all', tstat: 'pts', twin: 'l10', range: 'month', calMonth: '', calDay: null, stake: '', betOdd: '', listTab: 'players', listStat: 'all', listWin: 'l10', draft: '', saving: false, msg: '' };
@@ -157,13 +158,27 @@ function impliedProb(key, side, eo) {
    El % de L5/L10 es muy ruidoso: cuando L10 dice 80 %, en la realidad sale ~60 %.
    Aquí se usan sus últimos 40 partidos (10+ min), pesando más los recientes (vida media 10 partidos),
    y se suaviza la distribución para no depender de si cayó justo por encima o por debajo de la línea. */
+/* Si falta un compañero, el resto se reparte lo suyo. Medido con los partidos ya jugados: cada jugador recibe
+   ~10 % de los puntos, rebotes y asistencias que faltan, en proporción a lo que él aporta. Los triples no cambian. */
+const BOOST = { pts: .10, reb: .09, ast: .11 };
+function teammateBoost(p) {
+  const D2 = (D.boost ||= {}); if (D2[p.id]) return D2[p.id];
+  const mates = Object.values(D.players).filter(q => q.team === p.team && q.id !== p.id), out = {};
+  const avg = (q, k) => { const { mine, n } = regular(q); return n ? mine.reduce((a, x) => a + x[k], 0) / n : 0; };
+  for (const k of Object.keys(BOOST)) {
+    let miss = 0, tot = avg(p, k);
+    for (const q of mates) { const b = bajaOf(q.id), a = avg(q, k); if (b) miss += BAJA_W[b.status] * a; else tot += a; }
+    out[k] = tot > 0 ? BOOST[k] * miss * avg(p, k) / tot : 0;
+  }
+  return (D2[p.id] = out);
+}
 function propProb(p, k, line, side = 'over') {
   const PROPC = (D.propc ||= {}), ck = p.id + '|' + k + '|' + line;
   if (PROPC[ck] === undefined) {
-    const L = p.log.filter(g => g.min >= 10).slice(-40), n = L.length;
-    if (n < 5) PROPC[ck] = null;
+    const L = p.log.filter(g => g.min >= 10).slice(-40), n = L.length, bo = k === 'dd' || k === 'td' ? null : teammateBoost(p);
+    if (n < 5 || bajaOf(p.id)?.status === 'out') PROPC[ck] = null;
     else {
-      const v = L.map(g => val(g, k)), w = v.map((_, j) => Math.pow(.5, (n - 1 - j) / 10)), W = w.reduce((a, b) => a + b, 0);
+      const v = L.map(g => val(bo ? { ...g, pts: g.pts + bo.pts, reb: g.reb + bo.reb, ast: g.ast + bo.ast } : g, k)), w = v.map((_, j) => Math.pow(.5, (n - 1 - j) / 10)), W = w.reduce((a, b) => a + b, 0);
       if (k === 'dd' || k === 'td') PROPC[ck] = (v.reduce((a, x, j) => a + w[j] * (x > line), 0) + .5) / (W + 1);
       else {
         const mu = v.reduce((a, x, j) => a + w[j] * x, 0) / W, sd = Math.sqrt(v.reduce((a, x, j) => a + w[j] * (x - mu) ** 2, 0) / W) + .5;
@@ -216,10 +231,35 @@ function ratings() {
   const x = Array.from(b, (v, i) => v / A[i][i]);
   return (D.ratings = { ix, off: t => x[ix[t]] ?? 0, def: t => x[n + ix[t]] ?? 0, mu: x[2 * n] + x[2 * n + 2], hca: x[2 * n + 1] });
 }
+/* ---------- bajas ----------
+   Calibrado el 16-nov-2026 con los partidos ya jugados: por cada punto de "Game Score" por encima de un suplente
+   (0,3 por minuto) que le falta a un equipo, pierde 0,29 puntos de diferencia. Un titular bueno suele valer 2-4 puntos.
+   Solo cuenta a quien jugó al menos 4 de los últimos 10 partidos del equipo: si lleva tiempo fuera, el modelo ya lo sabe. */
+const BAJA_W = { out: 1, doubtful: .8, questionable: .35, probable: 0 };
+const BAJA_N = { out: 'Baja', doubtful: 'Duda seria', questionable: 'Duda', probable: 'Probable' };
+const IMPACT = { coef: .29, repl: .3 };
+const gameScore = g => g.pts + .4 * g.fgm - .7 * g.fga - .4 * (g.fta - g.ftm) + .5 * g.reb + .7 * g.ast + g.stl + .7 * g.blk - g.tov;
+function regular(p) {   // últimos 10 partidos del equipo y los que jugó él
+  const T = tGames(p.team).slice(-10), dates = new Set(T.map(x => x.date)), mine = p.log.filter(x => dates.has(x.date));
+  return { mine, n: T.length };
+}
+function playerImpact(p) {
+  const { mine } = regular(p); if (mine.length < 4) return 0;
+  const min = mean(mine.map(x => x.min)); if (min < 12) return 0;
+  return Math.max(0, mean(mine.map(gameScore)) - IMPACT.repl * min) * IMPACT.coef;
+}
+const bajaOf = pid => BAJAS[pid] && BAJA_W[BAJAS[pid].status] != null ? BAJAS[pid] : null;
+function teamBajas(t) {
+  return Object.values(D.players).filter(p => p.team === t && bajaOf(p.id)).map(p => { const b = bajaOf(p.id); return { p, b, w: BAJA_W[b.status], imp: playerImpact(p) }; })
+    .sort((a, b) => b.w * b.imp - a.w * a.imp || b.w - a.w);
+}
+const teamLoss = t => teamBajas(t).reduce((a, x) => a + x.w * x.imp, 0);
 function model(g) {
   const R = ratings();
-  const eh = R.mu + R.hca + R.off(g.home) + R.def(g.away), ea = R.mu + R.off(g.away) + R.def(g.home);
-  return { eh, ea, m: eh - ea, total: eh + ea, pHome: Phi((eh - ea) / SD.ml) };
+  let eh = R.mu + R.hca + R.off(g.home) + R.def(g.away), ea = R.mu + R.off(g.away) + R.def(g.home);
+  const lh = teamLoss(g.home), la = teamLoss(g.away);   // la pérdida se reparte: menos puntos propios y más del rival
+  eh += (la - lh) / 2; ea += (lh - la) / 2;
+  return { eh, ea, m: eh - ea, total: eh + ea, pHome: Phi((eh - ea) / SD.ml), lh, la };
 }
 /* Desviaciones ajustadas con los partidos ya jugados (probabilidad = normal con esta desviación). */
 const SD = { ml: 12, spread: 13, total: 18, pts: 12 };
@@ -373,6 +413,16 @@ function viewGame() {
 }
 
 /* apartado Partido: ganador de los dos equipos, historial y otros mercados */
+function bajasCard(g) {
+  const cols = [g.away, g.home].map(t => {
+    const L = teamBajas(t), loss = L.reduce((a, x) => a + x.w * x.imp, 0);
+    return `<div><div class="row-between"><b>${t}</b><span class="note">${loss >= .05 ? '−' + dec(loss) + ' pts' : 'sin efecto'}</span></div>
+      ${L.length ? `<ul class="bajas">${L.map(x => `<li><button class="linkb" data-pid="${x.p.id}">${esc(x.p.name)}</button> <span class="pill ${x.b.status === 'out' ? 'bad' : x.b.status === 'probable' ? '' : 'acc'}">${BAJA_N[x.b.status]}</span>${x.imp * x.w >= .3 ? ` <span class="mut xs">−${dec(x.imp * x.w)}</span>` : ''}${x.b.note ? `<div class="mut xs">${esc(x.b.note)}</div>` : ''}</li>`).join('')}</ul>` : '<div class="mut sm">Sin bajas</div>'}</div>`;
+  });
+  return `<div class="card pad"><div class="row-between"><h3>Bajas</h3><span class="note">${BAJAS_AT ? 'Actualizado ' + new Date(BAJAS_AT).toLocaleString('es-ES', { timeZone: 'Europe/Rome', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Sin parte de lesiones cargado'}</span></div>
+    <div class="bajas-grid">${cols.join('')}</div>
+    <p class="note" style="margin:8px 0 0">El modelo ya descuenta estas bajas (las dudas cuentan a medias). Lo que pierde cada equipo sale de lo que aporta el jugador frente a un suplente.</p></div>`;
+}
 function teamFacts(g, tm) {
   const opp = tm === g.home ? g.away : g.home, isHome = tm === g.home, L = tGames(tm), out = [];
   const restOf = x => { const l = tGames(x).slice(-1)[0]; return l ? Math.round((new Date(g.date + 'T00:00:00Z') - l.d) / 864e5) - 1 : null; };
@@ -402,7 +452,7 @@ function gameSection(g, md) {
   const facts = teamFacts(g, tm);
   const other = ['spread', 'total', 'pts'];
   return `<section class="stack">
-    <div class="sec-h"><h3>Ganador</h3><span class="note">Modelo: ${g.home} ${md.m >= 0 ? 'por' : 'pierde por'} ${dec(Math.abs(md.m))} · ${dec(md.eh, 0)}-${dec(md.ea, 0)}</span></div>
+    <div class="sec-h"><h3>Ganador</h3><span class="note">Modelo: ${g.home} ${md.m >= 0 ? 'por' : 'pierde por'} ${dec(Math.abs(md.m))} · ${dec(md.eh, 0)}-${dec(md.ea, 0)}${md.lh + md.la >= .5 ? ' · con bajas' : ''}</span></div>
     <div class="ml2">${evs.map(({ tm: x, ev }) => `<button class="mlb" data-mteam="${x === g.home ? 'home' : 'away'}" aria-pressed="${x === tm}">
       ${x === best ? `<span class="best">${ev.edge != null ? 'La que más conviene' : 'Favorito del modelo'}</span>` : ''}
       <div class="mlt">${V.crest(x, 30, 'sm')}<b>${x}</b></div>
@@ -419,6 +469,7 @@ function gameSection(g, md) {
       <div class="chartbox">${chart(items, 0, { label: 'Diferencia de puntos', lineLab: '0' })}</div>
       <div class="pad" style="padding-top:0"><div class="note">Diferencia de puntos de ${tm} en cada partido${S.gvenue !== 'all' ? (S.gvenue === 'home' ? ' en casa' : ' fuera') : ''}. Por encima de 0 = ganó. Pulsa una barra para ver el marcador.</div></div>
     </div>
+    ${bajasCard(g)}
     <div class="card pad"><h3>Detalles que pueden cambiarlo todo</h3><ul class="facts-list">${facts.map(([c, txt]) => `<li class="${c}">${esc(txt)}</li>`).join('')}</ul></div>
     <div class="sec-h"><h3>Otros mercados</h3></div>
     <div class="markets three">${other.map(m => { const tmm = m === 'total' ? null : tm, L = marketLine(g, m, tmm), o = ODDS[marketKey(g, m, tmm)];
@@ -479,7 +530,7 @@ function teamSection(g, tm) {
     <div class="row-between"><h3>${SK[k].short || SK[k].n} · ${tm}</h3><span class="note">Ordenado por ${PER.find(x => x[0] === S.twin)[1]}</span></div>
     <div class="plist">${rows.length ? rows.map(r => `<button class="pcard" data-open-p="${r.p.id}" data-open-k="${k}">
       <div class="pc-top">${avatar(r.p)}
-        <div class="pc-name"><div class="nm">${esc(r.p.name)} <span class="mut xs">${r.p.team} · ${r.p.pos}</span></div>
+        <div class="pc-name"><div class="nm">${esc(r.p.name)} <span class="mut xs">${r.p.team} · ${r.p.pos}</span>${bajaOf(r.p.id) ? ` <span class="pill ${bajaOf(r.p.id).status === 'out' ? 'bad' : 'acc'}" style="padding:1px 6px">${BAJA_N[bajaOf(r.p.id).status]}</span>` : ''}</div>
           <div class="pc-line"><span class="sd ${r.side}">${r.side === 'over' ? 'Más' : 'Menos'}</span> ${yes ? SK[k].n : `${dec(r.line)} ${esc(SK[k].short || SK[k].n)}`}</div></div>
         <div class="pc-num"><small>Cuota</small><b>${r.eo.v ? dec(r.eo.v, 2) : '–'}</b></div>
         <div class="pc-num"><small>Valor</small><b class="${r.edge >= 3 ? 'ok' : r.edge <= -3 ? 'err' : ''}">${r.edge != null ? (r.edge > 0 ? '+' : '') + dec(r.edge, 0) : '–'}</b></div></div>
@@ -510,7 +561,7 @@ function viewPlayer() {
   const items = games.map(x => ({ v: val(x, k), d1: fdate(x.d), d2: (x.home ? '' : '@') + x.opp, title: `${fdate(x.d)} ${x.home ? 'vs' : '@'} ${x.opp}: ${val(x, k)} en ${x.min} min` }));
   return `${topBar(p.name, true)}<div class="stack fade">
     <div class="card hero" style="--c2:${V.colors(p.team)[1]}">${V.playerBackdrop(p, FONDOS[p.id])}
-      <div class="who"><div class="av team">${V.crest(p.team, 50, ANIM ? 'in' : '')}</div><div style="min-width:0"><div class="n">${esc(p.name)}</div><div class="mut sm">${p.team} · ${{ G: 'Base/escolta', F: 'Alero', C: 'Pívot' }[p.pos]}${g ? ` · ${g.home === p.team ? 'vs' : '@'} ${opp} · ${esc(t.time)}` : ''}</div><div class="spec"><i></i>${V.SPEC[V.specialty(p)] || ''}</div></div><div class="grade" title="Nota del duelo: % de L10 y defensa del rival">${gradeL}</div></div>
+      <div class="who"><div class="av team">${V.crest(p.team, 50, ANIM ? 'in' : '')}</div><div style="min-width:0"><div class="n">${esc(p.name)}</div><div class="mut sm">${p.team} · ${{ G: 'Base/escolta', F: 'Alero', C: 'Pívot' }[p.pos]}${g ? ` · ${g.home === p.team ? 'vs' : '@'} ${opp} · ${esc(t.time)}` : ''}</div><div class="spec"><i></i>${V.SPEC[V.specialty(p)] || ''}</div>${bajaOf(p.id) ? `<div class="sm" style="margin-top:6px"><span class="pill ${bajaOf(p.id).status === 'out' ? 'bad' : 'acc'}">${BAJA_N[bajaOf(p.id).status]}</span> <span class="mut xs">${esc(bajaOf(p.id).note || '')}</span></div>` : ''}</div><div class="grade" title="Nota del duelo: % de L10 y defensa del rival">${gradeL}</div></div>
       ${isAdmin ? `<details class="fondo"><summary>Fondo animado</summary><div class="ctl" style="margin-top:8px"><input id="fondo" class="field" type="url" placeholder="Enlace a un GIF o MP4" value="${esc(FONDOS[p.id] || '')}" aria-label="Enlace del fondo"><button class="btn ghost" data-act="save-fondo">Guardar</button></div><div class="note">Vacío = animación propia según su especialidad.</div></details>` : ''}
     </div>
     <div class="chips" role="tablist" aria-label="Estadística">${STATS.map(s => `<button class="chip" role="tab" data-stat="${s.k}" aria-selected="${s.k === k}" title="${s.n}">${s.l}</button>`).join('')}</div>
@@ -1103,7 +1154,8 @@ async function boot() {
   app.innerHTML = `<div class="shell"><div class="empty" style="padding-top:30vh">Cargando…</div></div>`;
   if (DEMO) {
     const demo = window.TRIBUNA_DEMO();
-    D = prepare(demo.data); ODDS = store.get('demo-odds', null) || demo.odds; isAdmin = true; Object.assign(FONDOS, store.get('fondos', {}));
+    D = prepare(demo.data); ODDS = store.get('demo-odds', null) || demo.odds; isAdmin = true;
+    { const g0 = D.games[0]; if (g0) { const top = t => Object.values(D.players).filter(p => p.team === t).sort((a, b) => b.avgMin - a.avgMin); const [a] = top(g0.home), [, b] = top(g0.away); if (a) BAJAS[a.id] = { status: 'out', note: 'Ejemplo de la demo: baja por lesión en el tobillo.' }; if (b) BAJAS[b.id] = { status: 'questionable', note: 'Ejemplo de la demo: en duda.' }; BAJAS_AT = new Date().toISOString(); } } Object.assign(FONDOS, store.get('fondos', {}));
     BETS = [...demoHistory(), ...store.get('bets', [])]; S.calMonth = refDay().slice(0, 7);
     return render();
   }
@@ -1123,6 +1175,8 @@ async function bootReal() {
   const [snap, adm] = await Promise.all([sb.from('snapshots').select('data').eq('id', 'nba').maybeSingle(), sb.from('admins').select('email').limit(1)]);
   if (snap.error || !snap.data) { app.innerHTML = `<div class="shell"><div class="card empty" style="margin-top:20vh"><b>Aún no hay datos</b>${esc(snap.error?.message || 'Ejecuta actualizar_nba.py --subir en el ordenador del administrador.')}</div></div>`; return; }
   D = prepare(snap.data.data); isAdmin = !!adm.data?.length;
+  const bj = await sb.from('snapshots').select('data').eq('id', 'bajas').maybeSingle();
+  if (bj.data?.data) { BAJAS = bj.data.data.players || {}; BAJAS_AT = bj.data.data.updated || null; }
   if (isAdmin) { const gc = await sb.from('ajustes').select('valor').eq('clave', 'codigo_grupo').maybeSingle(); groupCode = gc.data?.valor ?? null; }
   const gd = D.games[0]?.date || todayET();
   /* Supabase devuelve como mucho 1.000 filas por consulta y una noche puede tener ~2.000 cuotas: se piden por páginas. */
