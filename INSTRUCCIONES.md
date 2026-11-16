@@ -87,6 +87,6 @@ Sin el código, una cuenta nueva no puede ver nada. Puedes cambiar el código cu
 1. Crea una cuenta gratis en the-odds-api.com (plan Starter, 500 créditos al mes). La clave llega por correo.
 2. Añade en `config.env` una línea `ODDS_API_KEY=tu_clave`. No la compartas ni la subas a GitHub.
 3. En Supabase > SQL Editor ejecuta `supabase_cuotas.sql` (una sola vez).
-4. Dos tareas de Windows: a las 13:00 `ejecutar_cuotas.bat` (ganador, hándicap y total, 3 créditos) y a las 21:00 `ejecutar_cuotas.bat --props` (lo mismo + props de jugadores).
+4. Dos tareas de Windows: a las 18:00 `ejecutar_cuotas.bat` (ganador, hándicap y total, 3 créditos) y a las 23:00 `ejecutar_cuotas.bat --props` (lo mismo + props de jugadores).
 El script reparte los créditos para que lleguen a fin de mes: primero puntos de todos los jugadores, y triples, rebotes y asistencias solo si sobra. Lo que pase queda en `cuotas.log`. En la pestaña Cuotas de la app ves los créditos que quedan. Las cuotas que pegues a mano tienen prioridad.
 Para probar sin gastar nada: `py actualizar_cuotas.py --prueba`.

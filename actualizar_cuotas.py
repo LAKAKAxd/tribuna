@@ -6,8 +6,8 @@ Uso (en el PC del administrador, después de actualizar_nba.py):
     py actualizar_cuotas.py --prueba   # no gasta nada: solo dice cuántos créditos quedan y qué haría
 
 Reparto pensado para que los créditos duren todo el mes:
-  - 13:00 (Italia): solo partidos.                       ~3 créditos
-  - 21:00 (Italia): partidos + props (las casas ya las han publicado).
+  - 18:00 (Italia): solo partidos.                       ~3 créditos
+  - 23:00 (Italia): partidos + props (las casas ya las han publicado).
     Las props se reparten con lo que sobra: primero puntos en todos los partidos,
     luego triples, rebotes, asistencias y P+R+A si hay margen. Nunca toca la reserva
     que hace falta para los partidos de los días que quedan del mes.
