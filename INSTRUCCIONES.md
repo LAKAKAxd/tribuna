@@ -83,10 +83,16 @@ Para quitar a alguien: en esa misma lista, los tres puntos > Delete user.
 3. En la app, pestaña Cuotas, verás el **Código del grupo**. Pásaselo a tus amigos con la dirección de la app: pulsan «Crear cuenta», ponen correo, contraseña y el código.
 Sin el código, una cuenta nueva no puede ver nada. Puedes cambiar el código cuando quieras.
 
-### Cuotas automáticas (The Odds API, gratis)
-1. Crea una cuenta gratis en the-odds-api.com (plan Starter, 500 créditos al mes). La clave llega por correo.
-2. Añade en `config.env` una línea `ODDS_API_KEY=tu_clave`. No la compartas ni la subas a GitHub.
-3. En Supabase > SQL Editor ejecuta `supabase_cuotas.sql` (una sola vez).
-4. Dos tareas de Windows: a las 18:00 `ejecutar_cuotas.bat` (ganador, hándicap y total, 3 créditos) y a las 21:00 `ejecutar_cuotas.bat --props` (lo mismo + props de jugadores).
-El script reparte los créditos para que lleguen a fin de mes: primero puntos de todos los jugadores, y triples, rebotes y asistencias solo si sobra. Lo que pase queda en `cuotas.log`. En la pestaña Cuotas de la app ves los créditos que quedan. Las cuotas que pegues a mano tienen prioridad.
-Para probar sin gastar nada: `py actualizar_cuotas.py --prueba`.
+### Cuotas automáticas (tres APIs gratis)
+Cada fuente tiene su papel:
+- **PropLine** (1.000 consultas al día): la principal. Ganador, hándicap, total, puntos por equipo y todas las props de jugadores (puntos, rebotes, asistencias, triples, combinadas, robos, tapones, pérdidas, tiros, doble-doble, triple-doble).
+- **The Odds API** (500 créditos al mes): solo rellena lo que PropLine no traiga. A las 21:00 también puede gastar créditos en props que falten, sin pasarse del reparto mensual.
+- **SportsGameOdds** (2.500 eventos al mes): última red, solo si aún falta algo.
+- **NBA.com**: estadísticas (09:00) y marcador en directo del boleto.
+- **Tú, a mano**: lo que no traiga ninguna (cuartos, primer anotador, especiales) o corregir una línea. Lo tuyo siempre tiene prioridad.
+
+1. Pon las tres claves en `config.env`: `PROPLINE_API_KEY=`, `ODDS_API_KEY=` y `SGO_API_KEY=`. No las compartas ni las subas a GitHub. Si falta una, el script se la salta.
+2. En Supabase > SQL Editor ejecuta `supabase_cuotas.sql` (una sola vez).
+3. Dos tareas de Windows: a las 18:00 `ejecutar_cuotas.bat` y a las 21:00 `ejecutar_cuotas.bat --props`.
+Lo que pase queda en `cuotas.log`; en la pestaña Cuotas de la app ves lo que queda de cada plan.
+Para probar sin subir nada: `py actualizar_cuotas.py --prueba` (o `--solo propline|oddsapi|sgo` para una sola fuente).

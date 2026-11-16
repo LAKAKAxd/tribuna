@@ -2,3 +2,4 @@ config.env
 nba.json
 *.log
 __pycache__/
+pruebas_api/
