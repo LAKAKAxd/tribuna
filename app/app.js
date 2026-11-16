@@ -116,7 +116,8 @@ function prepare(raw) {
     teams[t] = arr.map(r => { const g = obj(r, tcols); g.d = new Date(g.date + 'T00:00:00Z'); g.margin = g.pts - g.opp_pts; g.total = g.pts + g.opp_pts; return g; });
   }
   const [prev, cur] = raw.seasons;
-  return { updated: raw.updated, prev, cur, games: raw.games || [], players, teams, defCache: {} };
+  const seen = new Set(), games = (raw.games || []).filter(g => { const k = g.id || g.away + '@' + g.home; return seen.has(k) ? false : (seen.add(k), true); });
+  return { updated: raw.updated, prev, cur, games, players, teams, defCache: {} };
 }
 const gameOfTeam = t => D.games.find(g => g.home === t || g.away === t);
 const oppOf = t => { const g = gameOfTeam(t); return g ? (g.home === t ? g.away : g.home) : null; };
@@ -611,6 +612,8 @@ function viewAdmin() {
         ${Object.keys(ODDS).length ? '<button class="linkb" data-act="clear-odds">Borrar todas las de hoy</button>' : ''}</div>
       ${S.msg ? `<div class="sm ${S.msg.startsWith('Error') ? 'err' : 'ok'}">${esc(S.msg)}</div>` : ''}
     </div>
+    ${!DEMO && groupCode != null ? `<form id="groupcode" class="card pad stack"><h3>Código del grupo</h3><div class="note">Pásaselo a tus amigos junto con la dirección de la app. Con él crean su cuenta en «Crear cuenta». Si lo cambias, los que ya están dentro siguen dentro.</div>
+      <div style="display:flex;gap:8px"><input id="gcode" class="field" type="text" minlength="4" required value="${esc(groupCode)}" aria-label="Código del grupo" style="flex:1;min-width:0;font-weight:800;letter-spacing:.08em"><button class="btn ghost" type="submit">Guardar</button></div></form>` : ''}
     ${rows.length ? `<div class="card"><div class="tbl"><table><thead><tr><th class="l">Texto</th><th class="l">Se guarda como</th><th>Más</th><th>Menos</th><th class="l">Estado</th></tr></thead><tbody>
       ${rows.map(r => `<tr><td class="l">${esc(r.raw)}</td><td class="l">${esc(r.label || '–')}</td><td>${r.over ? dec(r.over, 2) : '–'}</td><td>${r.under ? dec(r.under, 2) : '–'}</td><td class="l ${r.err ? 'err' : 'ok'}">${esc(r.err || r.warn || 'Listo')}</td></tr>`).join('')}
     </tbody></table></div></div>` : ''}
@@ -618,14 +621,25 @@ function viewAdmin() {
 }
 
 /* ---------- login ---------- */
+let loginMode = 'in';
 function viewLogin(msg, email = '') {
+  const up = loginMode === 'up';
   return `${topBar('', false)}<div class="login"><div class="card pad stack">
-    <h1>Tribuna<span class="hi">.</span></h1><p class="mut" style="margin:0">Estadísticas NBA para el grupo. Entra con el correo y la contraseña que te dio el administrador.</p>
+    <h1>Tribuna<span class="hi">.</span></h1><p class="mut" style="margin:0">Estadísticas NBA para el grupo.</p>
+    <div class="seg wide" role="group" aria-label="Acceso"><button type="button" data-lmode="in" aria-pressed="${!up}">Entrar</button><button type="button" data-lmode="up" aria-pressed="${up}">Crear cuenta</button></div>
     <form id="login" class="stack"><label for="email" class="sm" style="font-weight:700">Correo</label><input id="email" class="field" type="email" required autocomplete="username" placeholder="tu@correo.com" value="${esc(email)}">
-      <label for="pass" class="sm" style="font-weight:700">Contraseña</label><input id="pass" class="field" type="password" required minlength="6" autocomplete="current-password">
-      <button class="btn" type="submit">Entrar</button></form>
-    ${msg ? `<div class="sm err" role="alert">${esc(msg)}</div>` : ''}<p class="note" style="margin:0">Solo pueden entrar las personas invitadas por el administrador. Tus apuestas y tu boleto son privados: solo los ves tú. +18.</p></div></div>`;
+      <label for="pass" class="sm" style="font-weight:700">Contraseña${up ? ' (mínimo 6 caracteres)' : ''}</label><input id="pass" class="field" type="password" required minlength="6" autocomplete="${up ? 'new-password' : 'current-password'}">
+      ${up ? `<label for="code" class="sm" style="font-weight:700">Código del grupo</label><input id="code" class="field" type="text" required autocomplete="off" autocapitalize="characters" placeholder="Te lo da el administrador">` : ''}
+      <button class="btn" type="submit">${up ? 'Crear mi cuenta' : 'Entrar'}</button></form>
+    ${msg ? `<div class="sm err" role="alert">${esc(msg)}</div>` : ''}<p class="note" style="margin:0">${up ? 'Necesitas el código que te ha pasado el administrador. ' : ''}Tus apuestas y tu boleto son privados: solo los ves tú. +18.</p></div></div>`;
 }
+function viewJoin(msg) {
+  return `${topBar('', false)}<div class="login"><div class="card pad stack">
+    <h1>Código del grupo</h1><p class="mut" style="margin:0">Has entrado como <b>${esc(userEmail)}</b>. Para ver las estadísticas escribe el código que te dio el administrador.</p>
+    <form id="join" class="stack"><input id="code" class="field" type="text" required autocomplete="off" autocapitalize="characters" aria-label="Código del grupo" placeholder="Código"><button class="btn" type="submit">Entrar al grupo</button></form>
+    ${msg ? `<div class="sm err" role="alert">${esc(msg)}</div>` : ''}<button class="linkb" data-act="logout">Cerrar sesión</button></div></div>`;
+}
+const showLogin = (msg, email) => { app.innerHTML = `<div class="shell">${viewLogin(msg, email)}</div>`; };
 
 /* ---------- mis apuestas: registro, directo, calendario y gráfico ---------- */
 const eur = v => (v < 0 ? '−' : '') + Math.abs(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '\u00a0€';
@@ -896,6 +910,7 @@ function go(view, patch = {}) { ANIM = true; S.back.push({ view: S.view, gameId:
 /* ---------- eventos ---------- */
 app.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
+  if (d.lmode) { loginMode = d.lmode; return showLogin('', document.getElementById('email')?.value || ''); }
   if (d.nav) { S.back = []; S.view = d.nav; S.msg = ''; render(); window.scrollTo(0, 0); return; }
   if (d.game) return go('game', { gameId: d.game, market: 'ml', mTeam: null, gtab: 'game', gvenue: 'all' });
   if (d.pid) return go('player', { pid: d.pid });
@@ -971,14 +986,28 @@ app.addEventListener('submit', async e => {
     BETS.push(b); slip = []; S.stake = ''; S.betOdd = ''; saveUser(); persistBets([b]); startLive();
     S.calDay = null; return go('bets');
   }
+  if (e.target.id === 'join') { e.preventDefault(); pendingCode = document.getElementById('code').value.trim(); return boot(); }
+  if (e.target.id === 'groupcode') {
+    e.preventDefault(); const v = document.getElementById('gcode').value.trim(); if (v.length < 4) return;
+    const { error } = await sb.from('ajustes').upsert({ clave: 'codigo_grupo', valor: v }); S.msg = error ? 'Error al guardar el código: ' + error.message : 'Código del grupo guardado.'; if (!error) groupCode = v; return render();
+  }
   if (e.target.id === 'newpass') {
     e.preventDefault(); const v = document.getElementById('np').value, out = document.getElementById('npmsg');
     const { error } = await sb.auth.updateUser({ password: v }); out.textContent = error ? 'No se pudo cambiar: ' + error.message : 'Contraseña cambiada.'; if (!error) document.getElementById('np').value = ''; return;
   }
   if (e.target.id !== 'login') return; e.preventDefault();
   const email = document.getElementById('email').value.trim(), btn = e.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Entrando…';
-  const { error } = await sb.auth.signInWithPassword({ email, password: document.getElementById('pass').value });
-  if (error) { app.innerHTML = `<div class="shell">${viewLogin(/invalid/i.test(error.message) ? 'Correo o contraseña incorrectos.' : 'No se pudo entrar: ' + error.message, email)}</div>`; return; }
+  const password = document.getElementById('pass').value;
+  if (loginMode === 'up') {
+    const code = document.getElementById('code').value.trim();
+    const { data, error } = await sb.auth.signUp({ email, password });
+    if (error) return showLogin(/not allowed|disabled/i.test(error.message) ? 'El registro está cerrado. Pide al administrador que te cree la cuenta.' : /already/i.test(error.message) ? 'Ese correo ya tiene cuenta: usa «Entrar».' : 'No se pudo crear la cuenta: ' + error.message, email);
+    if (!data.session) return showLogin('Cuenta creada, pero falta confirmarla. Avisa al administrador.', email);
+    pendingCode = code; loginMode = 'in';
+    if (!D) boot(); return;
+  }
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) return showLogin(/invalid/i.test(error.message) ? 'Correo o contraseña incorrectos.' : 'No se pudo entrar: ' + error.message, email);
   if (!D) boot();
 });
 let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(render, 200); });
@@ -1026,15 +1055,20 @@ async function boot() {
   if (booting) return; booting = true;
   try { return await bootReal(); } finally { booting = false; }
 }
-let booting = false;
+let booting = false, pendingCode = '', groupCode = null;
 async function bootReal() {
   sb = sb || window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
   const { data: { session } } = await sb.auth.getSession();
   if (!session) { app.innerHTML = `<div class="shell">${viewLogin('')}</div>`; return; }
   userEmail = session.user.email || '';
+  // Grupo: si la base de datos ya tiene el control de miembros, hay que haber metido el código.
+  if (pendingCode) { const j = await sb.rpc('unirse', { codigo: pendingCode }); pendingCode = ''; if (!j.error && j.data === false) { app.innerHTML = `<div class="shell">${viewJoin('Ese código no es correcto.')}</div>`; return; } }
+  const mem = await sb.rpc('es_miembro');
+  if (!mem.error && mem.data === false) { app.innerHTML = `<div class="shell">${viewJoin('')}</div>`; return; }
   const [snap, adm] = await Promise.all([sb.from('snapshots').select('data').eq('id', 'nba').maybeSingle(), sb.from('admins').select('email').limit(1)]);
   if (snap.error || !snap.data) { app.innerHTML = `<div class="shell"><div class="card empty" style="margin-top:20vh"><b>Aún no hay datos</b>${esc(snap.error?.message || 'Ejecuta actualizar_nba.py --subir en el ordenador del administrador.')}</div></div>`; return; }
   D = prepare(snap.data.data); isAdmin = !!adm.data?.length;
+  if (isAdmin) { const gc = await sb.from('ajustes').select('valor').eq('clave', 'codigo_grupo').maybeSingle(); groupCode = gc.data?.valor ?? null; }
   const gd = D.games[0]?.date || todayET();
   const [od, fd] = await Promise.all([sb.from('odds').select('*').eq('game_date', gd), sb.from('fondos').select('player_id,url')]);
   (fd.data || []).forEach(r => FONDOS[r.player_id] = r.url);

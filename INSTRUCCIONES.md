@@ -76,3 +76,9 @@ El correo gratuito de Supabase solo envía unos 2 mensajes por hora, así que la
 2. Escribe su correo y una contraseña (mínimo 6 caracteres) y deja marcado **Auto Confirm User**.
 3. Pásale el correo y la contraseña. Dentro de la app puede cambiarla abajo, en «Cambiar mi contraseña».
 Para quitar a alguien: en esa misma lista, los tres puntos > Delete user.
+
+### Que tus amigos creen su propia cuenta (código de grupo)
+1. Supabase > SQL Editor > New query: pega `supabase_grupo.sql` entero y pulsa Run.
+2. Authentication > Sign In / Providers: activa **Allow new users to sign up** y, dentro de Email, desactiva **Confirm email** (así no hace falta enviar correos).
+3. En la app, pestaña Cuotas, verás el **Código del grupo**. Pásaselo a tus amigos con la dirección de la app: pulsan «Crear cuenta», ponen correo, contraseña y el código.
+Sin el código, una cuenta nueva no puede ver nada. Puedes cambiar el código cuando quieras.
