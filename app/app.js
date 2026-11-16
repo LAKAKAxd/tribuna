@@ -1125,9 +1125,11 @@ async function bootReal() {
   D = prepare(snap.data.data); isAdmin = !!adm.data?.length;
   if (isAdmin) { const gc = await sb.from('ajustes').select('valor').eq('clave', 'codigo_grupo').maybeSingle(); groupCode = gc.data?.valor ?? null; }
   const gd = D.games[0]?.date || todayET();
-  const [od, fd] = await Promise.all([sb.from('odds').select('*').eq('game_date', gd), sb.from('fondos').select('player_id,url')]);
+  /* Supabase devuelve como mucho 1.000 filas por consulta y una noche puede tener ~2.000 cuotas: se piden por páginas. */
+  const allRows = async q => { const out = []; for (let i = 0; ; i += 1000) { const r = await q().range(i, i + 999); if (r.error) return { data: out.length ? out : null, error: r.error }; out.push(...(r.data || [])); if (!r.data || r.data.length < 1000) return { data: out, error: null }; } };
+  const [od, fd] = await Promise.all([allRows(() => sb.from('odds').select('*').eq('game_date', gd).order('player_id').order('stat')), sb.from('fondos').select('player_id,url')]);
   (fd.data || []).forEach(r => FONDOS[r.player_id] = r.url);
-  const ap = await sb.from('apuestas').select('data').order('created_at', { ascending: true });
+  const ap = await allRows(() => sb.from('apuestas').select('data').order('created_at', { ascending: true }));
   BETS = (ap.data || []).map(r => r.data); S.calMonth = refDay().slice(0, 7);
   if (BETS.some(b => !b.result)) startLive();
   ODDS = {}; (od.data || []).forEach(r => ODDS[r.player_id + '|' + r.stat] = { line: r.line == null ? null : +r.line, over: r.over_odd == null ? null : +r.over_odd, under: r.under_odd == null ? null : +r.under_odd, src: r.fuente || 'manual', at: r.updated_at });

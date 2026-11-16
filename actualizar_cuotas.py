@@ -438,11 +438,19 @@ class Supa:
         self.h = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json"}
 
     def manuales(self, fecha: str) -> set[tuple[str, str]] | None:
-        r = self.s.get(f"{self.url}/rest/v1/odds", headers=self.h, timeout=30,
-                       params={"select": "player_id,stat,fuente", "game_date": f"eq.{fecha}"})
-        if r.status_code >= 400:   # falta la columna 'fuente' (no se ejecutó supabase_cuotas.sql)
-            return None
-        return {(x["player_id"], x["stat"]) for x in r.json() if (x.get("fuente") or "manual") == "manual"}
+        # Supabase devuelve como mucho 1.000 filas por consulta: se piden por páginas.
+        filas, i = [], 0
+        while True:
+            r = self.s.get(f"{self.url}/rest/v1/odds", headers={**self.h, "Range": f"{i}-{i + 999}"}, timeout=30,
+                           params={"select": "player_id,stat,fuente", "game_date": f"eq.{fecha}", "order": "player_id,stat"})
+            if r.status_code >= 400 and r.status_code != 416:   # falta la columna 'fuente' (no se ejecutó supabase_cuotas.sql)
+                return None
+            pagina = r.json() if r.status_code != 416 else []
+            filas += pagina
+            if len(pagina) < 1000:
+                break
+            i += 1000
+        return {(x["player_id"], x["stat"]) for x in filas if (x.get("fuente") or "manual") == "manual"}
 
     def subir(self, filas: list[dict], con_fuente: bool) -> None:
         if not filas:
