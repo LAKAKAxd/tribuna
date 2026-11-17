@@ -414,3 +414,6 @@ table.box th,table.box td{padding:6px 7px}
 .mid .fin{font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--mut)}
 .game.is-live{border-color:color-mix(in srgb,var(--miss) 35%,var(--edge))}
 @media (max-width:420px){.game .pts{font-size:28px}.game .teams.scored .crest{--s:52px!important}.game .teams.scored .crest img,.game .teams.scored .crest svg{width:52px;height:auto}}
+/* con foto cargada: sin iniciales ni círculo de color detrás */
+.pav.ph{background:var(--surf2);box-shadow:inset 0 0 0 1.5px var(--edge)}
+.pav.ph .ini{display:none}

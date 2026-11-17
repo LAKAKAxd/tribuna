@@ -611,8 +611,8 @@ function teamSection(g, tm) {
 /* Foto del jugador (NBA.com, solo uso privado: fotosOficiales en config.js) o sus iniciales, con el logo de su equipo en la esquina. */
 function avatar(p, size = 42) {
   const [c1, c2] = V.colors(p.team);
-  const img = CFG.fotosOficiales ? `<img src="https://cdn.nba.com/headshots/nba/latest/260x190/${p.id}.png" alt="" loading="lazy" onerror="this.remove()">` : '';
-  return `<span class="pavw" style="--ps:${size}px"><span class="pav" style="--c1:${c1};--c2:${c2}">${initials(p.name)}${img}</span>${CFG.fotosOficiales ? `<span class="pbadge">${V.crest(p.team, Math.round(size * .38), 'sm')}</span>` : ''}</span>`;
+  const img = CFG.fotosOficiales ? `<img src="https://cdn.nba.com/headshots/nba/latest/260x190/${p.id}.png" alt="" loading="lazy" onload="this.parentNode.classList.add('ph')" onerror="this.remove()">` : '';
+  return `<span class="pavw" style="--ps:${size}px"><span class="pav" style="--c1:${c1};--c2:${c2}"><span class="ini">${initials(p.name)}</span>${img}</span>${CFG.fotosOficiales ? `<span class="pbadge">${V.crest(p.team, Math.round(size * .38), 'sm')}</span>` : ''}</span>`;
 }
 
 /* ---------- vista: jugador ---------- */
