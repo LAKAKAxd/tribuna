@@ -189,6 +189,12 @@ function prepare(raw) {
     const last = log.slice(-15);
     players[id] = { id, name: p.name, team: p.team, pos: p.pos || 'F', img: p.img || '', log, avgMin: mean(last.map(g => g.min)) };
   }
+  /* Fútbol: quien tiene selección («nat») juega con ella si su partido llega antes que el del club (parón de selecciones).
+     Así todo lo que va por equipo (su partido, rival, escudo, jugadores de cada equipo) sale bien sin tocar nada más. */
+  if (SOC) {
+    const next = t => Math.min(...(raw.games || []).filter(g => g.home === t || g.away === t).map(g => Date.parse(g.start) || Infinity), Infinity);
+    for (const [id, p] of Object.entries(raw.players || {})) if (p.nat && p.nat !== p.team && next(p.nat) < next(p.team)) { players[id].club = p.team; players[id].team = p.nat; }
+  }
   const teams = {};
   for (const [t, arr] of Object.entries(raw.teams || {})) {
     teams[t] = arr.map(r => { const g = obj(r, tcols); g.d = new Date(g.date + 'T00:00:00Z'); g.margin = g.pts - g.opp_pts; g.total = g.pts + g.opp_pts;

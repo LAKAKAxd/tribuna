@@ -1,7 +1,8 @@
 """
 Descarga diaria de fútbol para Tribuna (gratis, sin clave: API pública de ESPN).
 
-Competiciones: Serie A, LaLiga, Premier League y Champions League (temporada actual y anterior).
+Competiciones: Serie A, LaLiga, Premier League, Champions League y Nations League (temporada actual y anterior).
+Cada jugador guarda su club («team») y, si ha jugado con ella, su selección («nat»).
 Para medir bien a los equipos de Champions de otras ligas se bajan también los resultados
 (sin jugadores) de Bundesliga, Ligue 1, Portugal, Países Bajos, Bélgica, Turquía y Escocia.
 
@@ -33,8 +34,10 @@ from actualizar_nba import cargar_config
 
 CARPETA = os.path.dirname(os.path.abspath(__file__))
 ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer"
-COMPS = {"ita.1": "Serie A", "esp.1": "LaLiga", "eng.1": "Premier", "uefa.champions": "Champions"}
-EXTRA = ["ger.1", "fra.1", "por.1", "ned.1", "bel.1", "tur.1", "sco.1"]   # solo resultados
+COMPS = {"ita.1": "Serie A", "esp.1": "LaLiga", "eng.1": "Premier", "uefa.champions": "Champions", "uefa.nations": "Nations League"}
+# Solo resultados: ligas para medir a los rivales de Champions y partidos de selecciones para medir a las de la Nations League.
+EXTRA = ["ger.1", "fra.1", "por.1", "ned.1", "bel.1", "tur.1", "sco.1", "fifa.worldq.uefa", "fifa.friendly", "fifa.world"]
+SELECCIONES = {"uefa.nations", "fifa.worldq.uefa", "fifa.friendly", "fifa.world"}
 CACHE = os.path.join(CARPETA, "futbol_cache.json")
 
 # Por partido de un jugador. min = minutos jugados (90 si fue titular y no salió).
@@ -253,8 +256,10 @@ def construir(hoy: datetime) -> dict:
             logs[p["id"]].append([d, opp, p["home"], p["min"], p["g"], p["a"], p["sh"], p["sot"], p["fc"], p["yc"], p["rc"], p["sv"], e["season"], e["comp"]])
             if p["pos"]:
                 posiciones[p["id"]][p["pos"]] += 1
-            if e["comp"] != "uefa.champions" or p["id"] not in jugadores:
-                jugadores[p["id"]] = {"name": p["name"], "team": tm}   # el equipo de su último partido de liga
+            if e["comp"] in SELECCIONES:   # su selección va aparte: el equipo sigue siendo el club
+                jugadores.setdefault(p["id"], {"name": p["name"], "team": tm})["nat"] = tm
+            elif e["comp"] != "uefa.champions" or p["id"] not in jugadores:
+                jugadores[p["id"]] = {**jugadores.get(p["id"], {}), "name": p["name"], "team": tm}   # el equipo de su último partido de liga
     keep = {pid for pid, v in logs.items() if len(v) >= 5 and sum(r[3] for r in v) / len(v) >= 20}
     for pid in keep:
         jugadores[pid]["pos"] = posiciones[pid].most_common(1)[0][0] if posiciones[pid] else "M"
@@ -291,7 +296,7 @@ def subir_a_supabase(datos: dict) -> None:
     url, key = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_SERVICE_KEY")
     if not url or not key:
         sys.exit("Faltan SUPABASE_URL y SUPABASE_SERVICE_KEY.")
-    r = requests.post(f"{url}/rest/v1/snapshots", timeout=120, data=json.dumps({"id": "futbol", "data": datos}),
+    r = requests.post(f"{url}/rest/v1/snapshots", timeout=120, data=json.dumps({"id": "futbol", "data": datos}, separators=(",", ":")),
                       headers={"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json",
                                "Prefer": "resolution=merge-duplicates"})
     r.raise_for_status()
