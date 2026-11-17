@@ -5,9 +5,9 @@ window.TRIBUNA_CONFIG = {
   supabaseUrl: 'https://ulfxhbkoabqfyljteyab.supabase.co',
   supabaseAnonKey: 'sb_publishable_BJcJ4lvpenqIdjCcjxoOfg_FUsJtOdl',
 
-  /* Escudos: false = escudos propios con los colores de cada equipo (se pueden publicar).
-     true = logos oficiales de la NBA. Solo para uso privado: tienen derechos de marca. */
-  logosOficiales: false,
+  /* Escudos: true = logos oficiales de la NBA (solo para uso privado: tienen derechos de marca).
+     ANTES DE PUBLICAR LA APP: ponlo en false y se usan escudos propios con los colores de cada equipo. */
+  logosOficiales: true,
   /* true = fotos oficiales de los jugadores (NBA.com). Solo uso privado. false = iniciales con los colores del equipo. */
   fotosOficiales: false,
 
