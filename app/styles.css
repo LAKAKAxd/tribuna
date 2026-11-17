@@ -446,3 +446,11 @@ table.box th,table.box td{padding:6px 7px}
   .bet.expanded{grid-column:1/-1}
   .floatbar{bottom:24px;left:calc(50% + 100px)}
 }
+
+/* Configuración y perfil */
+.ic.me{padding:0;overflow:hidden;border:0}
+.pfp{width:var(--ps);height:var(--ps);border-radius:50%;display:grid;place-items:end center;flex:none;overflow:hidden;background:linear-gradient(160deg,var(--acc),color-mix(in srgb,var(--acc) 45%,var(--surf2)))}
+.pfp svg{width:82%;height:82%;fill:color-mix(in srgb,var(--acc-ink) 78%,transparent)}
+.profile{display:flex;align-items:center;gap:14px}.profile .mail{display:block;font-size:16px;overflow-wrap:anywhere}
+.btn.danger{background:none;border:1px solid color-mix(in srgb,var(--miss) 60%,transparent);color:var(--miss)}
+@media (max-width:420px){.top .fresh{font-size:0;gap:0;padding:0 4px}}

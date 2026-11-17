@@ -10,9 +10,11 @@ App web de estadísticas NBA y NFL para apuestas, para Fabio (vive en Italia) y 
 - **Props**: lista ordenada por valor con mini barras verde/rojo; ficha de jugador con barras (verde = se cumplió, rojo = no, número encima, línea marcada).
 - **Boleto** y **Apuestas**: registro con importe y cuota, calendario verde/rojo, gráfico de ganancias, y cada apuesta se despliega con marcador, cuartos, línea de evolución por jugador y box score.
 - **Cuotas** (solo admin): pegar líneas a mano.
+- **Configuración** (foto de perfil arriba a la derecha): correo con foto predeterminada, idioma (español, italiano, inglés), moneda (solo cambia el símbolo y el formato, no convierte), cambiar contraseña y cerrar sesión. Se guarda en `localStorage` (`tribuna:lang`, `tribuna:cur`).
+- **Idiomas**: la app se escribe en español y `app/i18n.js` traduce lo que se pinta (filas `[es, it, en]` en `T`; textos con números o nombres en `R`). **Cada texto nuevo de la app necesita su fila en `i18n.js`.** Fechas y números salen en el idioma elegido (`LOC` en `app.js`).
 
 ## Archivos
-- `app/` web estática (sin build): `index.html` (lee la liga antes de cargar nada), `app.js` (casi todo; lo que cambia por liga está en `LG`, `STATS_NBA`/`STATS_NFL`, `RIDGE`, `SD`, `IMPACT`), `styles.css`, `visual.js` (escudos y fondos), `espn.js` (directo y calendario), `demo.js` (datos simulados NBA y NFL), `config.js`.
+- `app/` web estática (sin build): `index.html` (lee la liga antes de cargar nada), `app.js` (casi todo; lo que cambia por liga está en `LG`, `STATS_NBA`/`STATS_NFL`, `RIDGE`, `SD`, `IMPACT`), `styles.css`, `visual.js` (escudos y fondos), `i18n.js` (idiomas), `espn.js` (directo y calendario), `demo.js` (datos simulados NBA y NFL), `config.js`.
 - `actualizar_nba.py` estadísticas de NBA.com (nba_api) → `nba.json` → Supabase (`snapshots` id `nba`).
 - `actualizar_nfl.py` estadísticas de nflverse (GitHub, sin clave) → `nfl.json` → `snapshots` id `nfl`. En NFL la columna `min` son oportunidades (pases + carreras + targets).
 - `actualizar_cuotas.py [--liga nfl]` cuotas → tabla `odds` (las NFL con prefijo `nfl:` en `player_id`); llama a `bajas.py` (parte de lesiones de ESPN → `snapshots` id `bajas` / `bajas_nfl`).
@@ -21,7 +23,7 @@ App web de estadísticas NBA y NFL para apuestas, para Fabio (vive en Italia) y 
 
 ## Publicar
 - GitHub Pages desde `main` de github.com/LAKAKAxd/tribuna → https://lakakaxd.github.io/tribuna/app/ (demo: `?demo`; demo NFL: elegir NFL arriba).
-- **Siempre** que cambies algo de `app/`, sube el número `?v=` de todos los scripts y estilos en `app/index.html` (último: 1794901000). Si no, los navegadores siguen con la versión vieja.
+- **Siempre** que cambies algo de `app/`, sube el número `?v=` de todos los scripts y estilos en `app/index.html` (último: 1794902400). Si no, los navegadores siguen con la versión vieja.
 - Comprueba la sintaxis: `node -e "new Function(require('fs').readFileSync('app/app.js','utf8'))"`. Para ver la app sin Supabase, abre `app/index.html?demo` con un servidor local.
 
 ## Datos y horarios (PC de Fabio, Windows, carpeta C:\Users\fabio\Tribuna)
