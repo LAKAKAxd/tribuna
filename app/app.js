@@ -122,6 +122,20 @@ function prepare(raw) {
   return { updated: raw.updated, prev, cur, games, players, teams, defCache: {} };
 }
 const gameOfTeam = t => D.games.find(g => g.home === t || g.away === t);
+/* Calendario de la semana: partidos de otros días (de ESPN), sin cuotas hasta su día. */
+const FUT = {};      // fecha EE. UU. -> lista de partidos | 'loading' | 'error'
+const findGame = id => D.games.find(x => x.id === id) || Object.values(FUT).flatMap(x => Array.isArray(x) ? x : []).find(x => x.id === id) || null;
+function gameTime(g) {
+  if (g.start) { const d = new Date(g.start); return { time: d.toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }), day: d.toLocaleDateString('es-ES', { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', month: 'short' }) }; }
+  return etToRome(g.date, g.status);
+}
+const addDays = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); return isoDay(new Date(Date.UTC(y, m - 1, d + n))); };
+async function loadDay(date) {
+  if (FUT[date] && FUT[date] !== 'error') return;
+  FUT[date] = 'loading'; render();
+  try { FUT[date] = await window.TRIBUNA_ESPN.schedule(date); } catch (e) { console.warn('Calendario', e); FUT[date] = 'error'; }
+  if (S.view === 'hoy') render();
+}
 const oppOf = t => { const g = gameOfTeam(t); return g ? (g.home === t ? g.away : g.home) : null; };
 const gameKey = g => g.away + '@' + g.home;
 
@@ -429,13 +443,40 @@ const legal = () => `<footer class="legal">Estimaciones a partir de partidos pas
 const updatedTxt = () => { const d = new Date(D.updated); return isNaN(d) ? '' : 'Estadísticas: ' + d.toLocaleString('es-ES', { timeZone: 'Europe/Rome', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); };
 
 /* ---------- vista: hoy ---------- */
+function dayChips(today) {
+  return `<div class="days" role="tablist" aria-label="Día">${Array.from({ length: 7 }, (_, i) => { const d = addDays(today, i), dt = new Date(d + 'T12:00:00Z');
+    const on = (S.day || today) === d;
+    return `<button role="tab" data-day="${d}" aria-selected="${on}"><small>${i === 0 ? 'Hoy' : dt.toLocaleDateString('es-ES', { weekday: 'short', timeZone: 'UTC' }).replace('.', '')}</small><b>${dt.getUTCDate()}</b></button>`; }).join('')}</div>`;
+}
+function viewDay(date, today) {
+  const L = FUT[date];
+  const list = Array.isArray(L) ? L : [];
+  const first = list.map(g => gameTime(g).time).sort()[0];
+  return `${topBar('', false)}<div class="stack fade">
+    <section class="tonight"><div class="eyebrow">${esc(nightLabel(date))}</div><h1>Calendario</h1>${dayChips(today)}
+      ${list.length ? `<div class="kpis"><div><b>${list.length}</b><span>${list.length === 1 ? 'partido' : 'partidos'}</span></div><div><b>${esc(first || '–')}</b><span>primer salto</span></div><div><b class="mut">–</b><span>cuotas y props: el mismo día</span></div></div>` : ''}</section>
+    ${L === 'loading' || !L ? '<div class="card empty">Cargando partidos…</div>' : L === 'error' ? '<div class="card empty"><b>No se pudo cargar el calendario</b>Vuelve a intentarlo en un momento.</div>' : !list.length ? '<div class="card empty"><b>No hay partidos este día</b></div>'
+      : list.map(g => { const t = gameTime(g), md = model(g);
+        return `<button class="card game" data-game="${esc(g.id)}">
+        <div class="teams"><div class="tm">${V.crest(g.away, 68, 'sm')}<b>${g.away}</b><span>${record(g.away, D.cur)}</span></div>
+        <div class="mid"><b>${esc(t.time)}</b><span class="xs">${esc(t.day)}</span></div>
+        <div class="tm">${V.crest(g.home, 68, 'sm')}<b>${g.home}</b><span>${record(g.home, D.cur)}</span></div></div>
+        <div class="wp"><i class="a" style="width:${(1 - md.pHome) * 100}%"></i><i class="h" style="width:${md.pHome * 100}%"></i></div>
+        <div class="wp-l"><span>${pct(1 - md.pHome)}</span><span>Modelo · total ${dec(md.total, 0)}</span><span>${pct(md.pHome)}</span></div>
+      </button>`; }).join('')}
+    <p class="note">Las cuotas y las props se cargan cada día a las 18:00 y a las 21:00 para los partidos de esa noche. El modelo de los próximos días usa las bajas de hoy.</p>
+    ${legal()}</div>`;
+}
 function viewHoy() {
+  const today = D.games[0]?.date || todayET();
+  if (S.day && S.day !== today) return viewDay(S.day, today);
   const g0 = D.games[0], first = D.games.map(g => etToRome(g.date, g.status).time).filter(x => /^\d/.test(x)).sort()[0];
   const nVal = [...propRows('players', 'all', 'l10'), ...propRows('games')].filter(r => ((r.type === 'p' ? r.b.edge : r.ev.edge) ?? -99) >= 5).length;
   return `${topBar('', false)}<div class="stack fade">
     <section class="tonight">
       <div class="eyebrow">${g0 ? esc(nightLabel(g0.date)) : ''}</div>
       <h1>Esta noche</h1>
+      ${dayChips(today)}
       ${D.games.length ? `<div class="kpis">
         <div><b>${D.games.length}</b><span>${D.games.length === 1 ? 'partido' : 'partidos'}</span></div>
         <div><b>${esc(first || '–')}</b><span>primer salto</span></div>
@@ -463,8 +504,8 @@ function viewHoy() {
 
 /* ---------- vista: partido ---------- */
 function viewGame() {
-  const g = D.games.find(x => x.id === S.gameId); if (!g) { S.view = 'hoy'; return viewHoy(); }
-  const t = etToRome(g.date, g.status), md = model(g);
+  const g = findGame(S.gameId); if (!g) { S.view = 'hoy'; return viewHoy(); }
+  const t = gameTime(g), md = model(g);
   const tabs = [['game', 'Partido'], ['away', 'Jugadores ' + g.away], ['home', 'Jugadores ' + g.home]];
   return `${topBar(g.away + ' @ ' + g.home, true)}<div class="stack fade">
     <div class="card pad matchup" style="--ca:${V.colors(g.away)[0]};--ch:${V.colors(g.home)[0]}">
@@ -954,7 +995,7 @@ const OPENBETS = new Set(), OPENBOX = new Set();
 function openGameIds() { return [...new Set(BETS.filter(b => OPENBETS.has(b.id)).flatMap(b => b.legs.map(l => l.gameId)).filter(Boolean))]; }
 /* Datos para buscar un partido en ESPN: fecha (EE. UU.) y equipos, sacados de los partidos de hoy o de la apuesta. */
 function gameRef(id) {
-  const g = D.games.find(x => x.id === id); if (g) return { date: g.date, home: g.home, away: g.away };
+  const g = findGame(id); if (g) return { date: g.date, home: g.home, away: g.away };
   for (const b of BETS) for (const l of b.legs) if (l.gameId === id) return { date: b.date, home: l.home, away: l.away, team: l.team || D.players[l.pid]?.team };
   return null;
 }
@@ -1109,7 +1150,7 @@ function scoreboard(id, l, betDate) {
   const { g, lv, home, away } = gameLiveInfo(id, l);
   let hs = lv && lv.state !== 'pre' ? lv.home.score : null, as = lv && lv.state !== 'pre' ? lv.away.score : null, txt = lv?.text || '';
   if (hs == null && home && away) { const r = (D.teams[home] || []).find(x => x.date === betDate && x.opp === away); if (r) { hs = r.pts; as = r.opp_pts; txt = 'Final'; } }
-  if (hs == null && g) { const t = etToRome(g.date, g.status); txt = `Empieza a las ${t.time}`; }
+  if (hs == null && g) { const t = gameTime(g); txt = `Empieza a las ${t.time}`; }
   const live = lv?.state === 'live', win = hs != null && lv?.state === 'final' ? (hs > as ? 'h' : 'a') : '';
   const per = lv?.home.periods?.length ? `<div class="linescore" style="grid-template-columns:44px repeat(${lv.home.periods.length + 1},1fr)"><span></span>${lv.home.periods.map((_, i) => `<em>${i < 4 ? i + 1 + '.º' : 'P' + (i - 3)}</em>`).join('')}<em>T</em>
       ${[['away', away], ['home', home]].map(([sd, tri]) => `<b>${tri}</b>${lv[sd].periods.map(v => `<span>${v}</span>`).join('')}<span class="tt">${lv[sd].score}</span>`).join('')}</div>` : '';
@@ -1231,7 +1272,9 @@ function render() {
   const v = { hoy: viewHoy, game: viewGame, player: viewPlayer, props: viewProps, slip: viewSlip, bets: viewBets, admin: viewAdmin }[S.view] || viewHoy;
   const ae = document.activeElement, keep = ae && ae.id ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd } : null;
   const anim = ANIM;
-  app.innerHTML = `<div class="shell">${v()}</div>${tabBar()}`;
+  const fut = S.view === 'game' && findGame(S.gameId)?.future, saved = ODDS;
+  if (fut) ODDS = {};   // los días futuros aún no tienen cuotas: que no se cuelen las de hoy del mismo equipo
+  try { app.innerHTML = `<div class="shell">${v()}</div>${tabBar()}`; } finally { if (fut) ODDS = saved; }
   if (!anim) app.querySelectorAll('.fade').forEach(el => el.classList.remove('fade'));
   const pb = app.querySelector('.pillbar'), sel = pb && pb.querySelector('[aria-selected="true"]');
   if (sel) pb.scrollLeft = Math.max(0, sel.offsetLeft - pb.offsetLeft - (pb.clientWidth - sel.offsetWidth) / 2);
@@ -1245,6 +1288,7 @@ app.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
   if (d.lmode) { loginMode = d.lmode; return showLogin('', document.getElementById('email')?.value || ''); }
   if (d.nav) { S.back = []; S.view = d.nav; S.msg = ''; render(); window.scrollTo(0, 0); return; }
+  if (d.day) { S.day = d.day; const today = D.games[0]?.date || todayET(); if (d.day !== today) loadDay(d.day); return render(); }
   if (d.game) return go('game', { gameId: d.game, market: 'ml', mTeam: null, gtab: 'game', gvenue: 'all' });
   if (d.pid) return go('player', { pid: d.pid });
   if (d.openP) return go('player', { pid: d.openP, stat: d.openK });
@@ -1261,8 +1305,8 @@ app.addEventListener('click', async e => {
   if (d.twin) { S.twin = d.twin; return render(); }
   if (d.mteam) { S.mTeam = d.mteam; return render(); }
   if (d.gwin) { S.gwin = d.gwin; return render(); }
-  if (d.gside) { const g = D.games.find(x => x.id === S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away); sides[marketKey(g, S.market, tm)] = d.gside; saveUser(); return render(); }
-  if (d.gstep) { const g = D.games.find(x => x.id === S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm); uLines[key] = marketLine(g, S.market, tm) + num(d.gstep); saveUser(); return render(); }
+  if (d.gside) { const g = findGame(S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away); sides[marketKey(g, S.market, tm)] = d.gside; saveUser(); return render(); }
+  if (d.gstep) { const g = findGame(S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm); uLines[key] = marketLine(g, S.market, tm) + num(d.gstep); saveUser(); return render(); }
   if (d.ltab) { S.listTab = d.ltab; return render(); }
   if (d.lwin) { S.listWin = d.lwin; return render(); }
   if (d.lstat) { S.listStat = d.lstat; return render(); }
@@ -1278,15 +1322,15 @@ app.addEventListener('click', async e => {
   if (act === 'mode') { mode = mode === 'auto' ? 'light' : mode === 'light' ? 'dark' : 'auto'; store.set('mode', mode); applyMode(); return render(); }
   if (act === 'reset-line') { delete uLines[lineKey(S.pid, S.stat)]; saveUser(); return render(); }
   if (act === 'reset-odd') { const key = lineKey(S.pid, S.stat); delete uOdds[key + '|' + getSide(key)]; saveUser(); return render(); }
-  if (act === 'reset-gline' || act === 'reset-godd') { const g = D.games.find(x => x.id === S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm);
+  if (act === 'reset-gline' || act === 'reset-godd') { const g = findGame(S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm);
     if (act === 'reset-gline') delete uLines[key]; else { delete uOdds[key + '|over']; delete uOdds[key + '|under']; } saveUser(); return render(); }
   if (act === 'add-player') { const p = D.players[S.pid], k = S.stat, key = lineKey(p.id, k), line = getLine(p, k), side = getSide(key);
     slip = slip.filter(l => !(l.type === 'p' && l.pid === p.id && l.stat === k)); slip.push({ type: 'p', pid: p.id, stat: k, line, side, odd: effOdd(key, side, line).v }); saveUser(); return render(); }
-  if (act === 'add-game') { const g = D.games.find(x => x.id === S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm);
+  if (act === 'add-game') { const g = findGame(S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm);
     const side = S.market === 'total' || S.market === 'pts' ? getSide(key) : 'over', line = marketLine(g, S.market, tm), ev = marketEval(g, S.market, tm, side, line);
     slip = slip.filter(l => !(l.type === 'g' && l.gameId === g.id && l.market === S.market && l.team === tm)); slip.push({ type: 'g', gameId: g.id, market: S.market, team: tm, side, line, odd: ev.eo.v }); saveUser(); return render(); }
   if (act === 'save-fondo') return saveFondo();
-  if (act === 'add-ml') { const g = D.games.find(x => x.id === S.gameId), tm = S.mTeam === 'home' ? g.home : g.away, ev = marketEval(g, 'ml', tm, 'over', 0);
+  if (act === 'add-ml') { const g = findGame(S.gameId), tm = S.mTeam === 'home' ? g.home : g.away, ev = marketEval(g, 'ml', tm, 'over', 0);
     slip = slip.filter(l => !(l.type === 'g' && l.gameId === g.id && l.market === 'ml')); slip.push({ type: 'g', gameId: g.id, market: 'ml', team: tm, side: 'over', line: 0, odd: ev.eo.v }); saveUser(); return render(); }
   if (act === 'logout') { await sb.auth.signOut(); D = null; BETS = []; location.reload(); return; }
   if (act === 'sim-live') { simulateLive(); return render(); }
@@ -1299,7 +1343,7 @@ app.addEventListener('change', e => {
   const t = e.target, v = num(t.value);
   if (t.id === 'pline' && v >= 0) { uLines[lineKey(S.pid, S.stat)] = Math.round(v * 2) / 2; saveUser(); render(); }
   if (t.id === 'podd') { const key = lineKey(S.pid, S.stat) + '|' + getSide(lineKey(S.pid, S.stat)); if (v > 1) uOdds[key] = Math.round(v * 100) / 100; else delete uOdds[key]; saveUser(); render(); }
-  if (t.id === 'gline' || t.id === 'godd') { const g = D.games.find(x => x.id === S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm);
+  if (t.id === 'gline' || t.id === 'godd') { const g = findGame(S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm);
     if (t.id === 'gline' && isFinite(v)) uLines[key] = Math.round(v * 2) / 2;
     if (t.id === 'godd') { const sd = S.market === 'total' || S.market === 'pts' ? getSide(key) : 'over'; if (v > 1) uOdds[key + '|' + sd] = Math.round(v * 100) / 100; else delete uOdds[key + '|' + sd]; }
     saveUser(); render(); }

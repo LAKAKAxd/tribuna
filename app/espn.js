@@ -106,9 +106,18 @@ window.TRIBUNA_ESPN = (function () {
     }
     return out;
   }
+  /* Partidos programados de una fecha (calendario de la semana). */
+  async function schedule(date) {
+    const j = await getJSON(`${BASE}/scoreboard?dates=${String(date).replace(/-/g, '')}`);
+    return (j.events || []).map(ev => {
+      const c = ev.competitions?.[0] || {}, cs = c.competitors || [], H = cs.find(x => x.homeAway === 'home') || {}, A = cs.find(x => x.homeAway === 'away') || {};
+      return { id: 'espn:' + ev.id, date, start: ev.date, home: tri(H.team?.abbreviation), away: tri(A.team?.abbreviation), status: '', future: true,
+        live: { ...status(c.status || ev.status), home: { tri: tri(H.team?.abbreviation), score: +H.score || 0 }, away: { tri: tri(A.team?.abbreviation), score: +A.score || 0 } } };
+    }).filter(g => g.home && g.away).sort((a, b) => a.start < b.start ? -1 : 1);
+  }
   async function live({ date, home, away, team, players }) {
     const id = await findEvent(date, home, away, team); if (!id) return null;
     return parseSummary(await getJSON(`${BASE}/summary?event=${id}`), players);
   }
-  return { live, scoreboard, parseSummary, findEvent, tri };
+  return { live, scoreboard, schedule, parseSummary, findEvent, tri };
 })();
