@@ -126,6 +126,10 @@ Avisa de: ticket ganado o perdido, selección cumplida en combinadas y «a X le 
 - Arriba, **FC** en el selector. «Próximos partidos» enseña los de los próximos 7 días con filtro por competición.
 - Datos: `actualizar_futbol.py` a las 09:00 (dentro de `ejecutar_actualizacion.bat`). Sin cuotas automáticas: se pueden pegar a mano en Cuotas (`INT ganador 1,80`, `NAP@INT empate 3,40`, `NAP@INT ambos 1,85 1,95`, `NAP@INT total 2,5 1,90 1,90`, `Lautaro gol 0,5 2,40`, `Lautaro tiros 2,5 1,85 1,95`).
 - El modelo acierta el 1X2 mejor que el azar; en más/menos goles y ambos marcan apenas.
+- En cada partido: **Estadísticas por partido** (córners, tarjetas, tiros, faltas cometidas y recibidas, fueras de juego, posesión, pases, entradas, paradas y goles en la 1.ª parte; últimos 5, 10 o temporada, en total, en casa o fuera), **Precedentes** (últimos 6 enfrentamientos) y mercados de **córners, tarjetas, tiros, tiros a puerta, faltas y fueras de juego** del partido o de cada equipo, con su historial y el modelo.
+- Cuotas a mano de estos mercados: `NAP@INT corners 9,5 1,85 1,95` (total del partido) o `INT tarjetas 2,5 1,90 1,90` (de un equipo). También `tiros`, `puerta`, `faltas` y `fueras`.
+- Saques de banda, saques de puerta y tiros libres no salen en los datos gratis de ESPN; las faltas recibidas son la mejor aproximación a los tiros libres.
+- Tras actualizar la app hay que volver a pegar la función `avisos` en Supabase para que avise también de estos mercados.
 
 ### Site URL de Supabase
 Supabase > Authentication > URL Configuration: **Site URL** = `https://lakakaxd.github.io/tribuna/app/` y añade la misma en **Redirect URLs**. Es la dirección a la que llevan los correos de Supabase (cambio de contraseña, invitaciones).

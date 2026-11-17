@@ -75,7 +75,11 @@ const soccer = (comp, id) => once(`soc|${comp}|${id}`, async () => {
     const st = Object.fromEntries((p.stats || []).map(x => [x.name, +x.value || 0]));
     players[String(p.athlete?.id)] = { played: !!(p.starter || p.subbedIn), g: st.totalGoals || 0, a: st.goalAssists || 0, sh: st.totalShots || 0, sot: st.shotsOnTarget || 0, fc: st.foulsCommitted || 0, yc: st.yellowCards || 0, sv: st.saves || 0 };
   }
-  return { state: estado(c.status), home: { score: side('home') }, away: { score: side('away') }, players };
+  // estadísticas de equipo (córners, tarjetas...) para los mercados de equipo de fútbol
+  const TS = { sh: 'totalShots', sot: 'shotsOnTarget', cor: 'wonCorners', fc: 'foulsCommitted', yc: 'yellowCards', rc: 'redCards', off: 'offsides', sv: 'saves' };
+  const team = ha => { const t = (j.boxscore?.teams || []).find(x => x.homeAway === ha); if (!t?.statistics?.length) return null;
+    const v = Object.fromEntries(t.statistics.map(x => [x.name, +x.displayValue || 0])), o = Object.fromEntries(Object.entries(TS).map(([k, n]) => [k, v[n] || 0])); o.crd = o.yc + o.rc; return o; };
+  return { state: estado(c.status), home: { score: side('home'), st: team('home') }, away: { score: side('away'), st: team('away') }, players };
 });
 /* Partido de ESPN de una selección (por fecha y equipos). */
 async function eventOf(l) {
@@ -94,6 +98,12 @@ async function legEval(l) {
     const ps = liga === 'futbol' ? (ev.players[String(l.pid)]?.played ? ev.players[String(l.pid)] : null) : (await boxscore(liga, ev.id))[nkey(l.name)];
     if (!ps) return { st: fin ? 'void' : null, live: !fin };
     const cur = val(ps, l.stat, liga), over = cur > l.line;
+    return { st: l.side === 'over' ? (over ? 'won' : fin ? 'lost' : null) : (over ? 'lost' : fin ? 'won' : null), cur, live: !fin };
+  }
+  const sm = liga === 'futbol' && /^[st]_/.test(l.market || '') ? l.market.slice(2) : null;   // 's_cor' = córners del partido, 't_cor' = de un equipo
+  if (sm) {
+    if (!ev.home.st || !ev.away.st) return { st: null, live: !fin };
+    const cur = l.market[0] === 's' ? ev.home.st[sm] + ev.away.st[sm] : (l.team === l.home ? ev.home.st : ev.away.st)[sm], over = cur > l.line;
     return { st: l.side === 'over' ? (over ? 'won' : fin ? 'lost' : null) : (over ? 'lost' : fin ? 'won' : null), cur, live: !fin };
   }
   const hs = ev.home.score, as = ev.away.score, isH = l.team === l.home, mine = isH ? hs : as, theirs = isH ? as : hs;

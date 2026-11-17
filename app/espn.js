@@ -65,6 +65,7 @@ window.TRIBUNA_ESPN = (function () {
     const map = (eid, name, team) => idOf[eid] || (idOf[eid] = byTeam[team]?.[key(name)] || all[key(name)] || 'e' + eid);
     const out = {};
     if (SOC) { const t = state === 'live' ? socMin(st.displayClock) : state === 'final' ? 90 : 0;
+      home.st = socTeam(j, 'home'); away.st = socTeam(j, 'away');
       return { box: { state, text, q, cl, t, home, away, players: socBox(j, t), src: 'espn' }, pbp: {} }; }
     if (NFL) return { box: { state, text, q, cl, t: state === 'live' ? elapsed(period || 1, clock) : state === 'final' ? 60 : 0, home, away, players: nflBox(j, map), src: 'espn' }, pbp: {} };
     for (const t of j.boxscore?.players || []) {
@@ -110,6 +111,14 @@ window.TRIBUNA_ESPN = (function () {
   }
 
   /* Fútbol: estadísticas de cada jugador (los ids de la app ya son los de ESPN) y minutos jugados según los cambios. */
+  /* Estadísticas de un equipo en el partido (córners, tarjetas...) o null si ESPN aún no las da. */
+  const SOC_TS = { sh: 'totalShots', sot: 'shotsOnTarget', cor: 'wonCorners', fc: 'foulsCommitted', yc: 'yellowCards', rc: 'redCards', off: 'offsides', sv: 'saves' };
+  function socTeam(j, ha) {
+    const t = (j.boxscore?.teams || []).find(x => x.homeAway === ha); if (!t?.statistics?.length) return null;
+    const v = Object.fromEntries(t.statistics.map(x => [x.name, +x.displayValue || 0])), o = {};
+    for (const [k, n] of Object.entries(SOC_TS)) o[k] = v[n] || 0;
+    o.crd = o.yc + o.rc; return o;
+  }
   function socBox(j, now) {
     const entra = {}, sale = {}, out = {};
     for (const k of j.keyEvents || []) if (k.type?.type === 'substitution') { const m = socMin(k.clock?.displayValue), ps = (k.participants || []).map(x => x.athlete?.id); if (ps.length >= 2) { entra[ps[0]] = m; sale[ps[1]] = m; } }

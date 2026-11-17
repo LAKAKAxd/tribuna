@@ -482,3 +482,16 @@ table.box th,table.box td{padding:6px 7px}
 .ml2.three .mlb .odd{font-size:24px}
 .markets.four{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media (max-width:420px){.markets.four{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* fútbol: comparativa de estadísticas y precedentes */
+.cmp-h{display:flex;justify-content:space-between;font-weight:700;margin-bottom:4px}
+.cmp-h>span{display:flex;align-items:center;gap:6px}
+.cmp-r{display:grid;grid-template-columns:52px 1fr 52px;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--line)}
+.cmp-r>b{font-variant-numeric:tabular-nums}
+.cmp-r>b:last-child{text-align:right}
+.cmp-m{text-align:center;min-width:0}
+.cmp-bar{height:6px;border-radius:3px;background:rgba(128,128,128,.28);overflow:hidden;margin-top:3px}
+.cmp-bar>i{display:block;height:100%;background:var(--acc)}
+.h2h{list-style:none;margin:8px 0 0;padding:0}
+.h2h li{display:flex;flex-direction:column;gap:2px;padding:7px 0;border-top:1px solid var(--line)}
+.h2h-s b{margin:0 4px}
