@@ -105,3 +105,8 @@ Para probar sin subir nada: `py actualizar_cuotas.py --prueba` (o `--solo propli
 - Datos: `actualizar_nfl.py` a las 09:00 (dentro de `ejecutar_actualizacion.bat`). Cuotas y bajas: `py actualizar_cuotas.py --liga nfl`, que `ejecutar_cuotas.bat` lanza solo a las 18:00. Las cuotas NFL se guardan en la misma tabla con el prefijo `nfl:`.
 - No hace falta ejecutar nada nuevo en Supabase.
 - Cuotas a mano: igual que en la NBA, con estas estadísticas: `pyd` (yardas de pase), `ptd`, `cmp`, `att`, `int`, `pry` (pase + carrera), `ryd` (carrera), `car`, `rec`, `reyd` (recepción), `rry` (carrera + recepción), `tgt` y `td` (anota touchdown, línea 0,5). Ejemplo: `Mahomes pyd 265,5 1,87 1,93`.
+
+### ¿Acierta el valor? y Grupo
+1. En Supabase > SQL Editor ejecuta `supabase_valor_grupo.sql` (una sola vez).
+2. **¿Acierta el valor?** (pestaña Cuotas o Configuración, solo el administrador): cada vez que abres la app después de que se carguen las cuotas y antes de los partidos, la app guarda lo que decía el modelo de cada apuesta. Con el tiempo ves si las apuestas «Con valor» ganan de verdad (apostando 1 unidad a cada una). Hacen falta unas semanas (~200 apuestas cerradas) para que el resultado no sea suerte.
+3. **Grupo** (pestaña Apuestas > Grupo): cada uno, en Configuración, elige el nombre que verán los demás y si comparte sus apuestas. Quien comparte sale en el ranking (ordenado por rentabilidad) y sus tickets se ven en el muro. El correo nunca se enseña.

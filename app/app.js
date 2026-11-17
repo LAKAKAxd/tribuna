@@ -40,6 +40,7 @@ function etToRome(dateStr, status) {
   const offH = parseInt(off.replace('GMT', '')) || -5;
   const utc = new Date(Date.UTC(y, mo - 1, d, h - offH, +m[2]));
   return {
+    ms: utc.getTime(),
     time: utc.toLocaleTimeString(LOC, { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }),
     day: utc.toLocaleDateString(LOC, { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', month: 'short' }),
   };
@@ -138,7 +139,7 @@ let FONDOS = Object.assign({}, CFG.fondos || {});
 let ANIM = true;
 let BETS = [];
 let BAJAS = {}, BAJAS_AT = null;   // id NBA -> { status: 'out'|'doubtful'|'questionable'|'probable', note, name, team }
-let D = null, ODDS = {}, sb = null, isAdmin = DEMO, userEmail = '';
+let D = null, ODDS = {}, sb = null, isAdmin = DEMO, userEmail = '', userId = DEMO ? 'demo-yo' : '';
 const S = { view: 'hoy', back: [], gameId: null, pid: null, stat: LG.statDef, win: 'l10', venue: 'all', minMin: 0, rest: 'all',
   market: 'ml', mTeam: 'home', gwin: 'l10', gtab: 'game', gvenue: 'all', tstat: LG.teamStat, twin: 'l10', range: 'month', calMonth: '', calDay: null, stake: '', betOdd: '', listTab: 'players', listStat: 'all', listWin: 'l10', draft: '', saving: false, msg: '' };
 let slip = store.get('slip', []), uLines = store.get('lines', {}), uOdds = store.get('uodds', {}), sides = store.get('sides', {});
@@ -173,7 +174,7 @@ const gameOfTeam = t => D.games.find(g => g.home === t || g.away === t);
 const FUT = {};      // fecha EE. UU. -> lista de partidos | 'loading' | 'error'
 const findGame = id => D.games.find(x => x.id === id) || Object.values(FUT).flatMap(x => Array.isArray(x) ? x : []).find(x => x.id === id) || null;
 function gameTime(g) {
-  if (g.start) { const d = new Date(g.start); return { time: d.toLocaleTimeString(LOC, { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }), day: d.toLocaleDateString(LOC, { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', month: 'short' }) }; }
+  if (g.start) { const d = new Date(g.start); return { ms: d.getTime(), time: d.toLocaleTimeString(LOC, { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }), day: d.toLocaleDateString(LOC, { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', month: 'short' }) }; }
   return etToRome(g.date, g.status);
 }
 const addDays = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); return isoDay(new Date(Date.UTC(y, m - 1, d + n))); };
@@ -506,7 +507,7 @@ function fresh() {
 function tabBar() {
   const t = [['hoy', 'Hoy', ICON.hoy], ['props', 'Props', ICON.props], ['slip', 'Boleto', ICON.slip], ['bets', 'Apuestas', ICON.bets]];
   if (isAdmin) t.push(['admin', 'Cuotas', ICON.admin]);
-  const root = { hoy: 'hoy', game: 'hoy', player: 'hoy', props: 'props', slip: 'slip', bets: 'bets', admin: 'admin' }[S.view];
+  const root = { hoy: 'hoy', game: 'hoy', player: 'hoy', props: 'props', slip: 'slip', bets: 'bets', admin: 'admin', valor: 'admin' }[S.view];
   return `<div class="tabbar"><nav>${t.map(([v, l, i]) => `<button data-nav="${v}" ${root === v ? 'aria-current="page"' : ''}>${i}${l}${v === 'slip' && slip.length ? `<span class="badge">${slip.length}</span>` : ''}</button>`).join('')}</nav></div>`;
 }
 const legal = () => `<footer class="legal">Estimaciones a partir de partidos pasados; no garantizan nada. +18 · Juega solo lo que puedas permitirte perder.${DEMO ? '<br>Modo demostración: estadísticas y cuotas simuladas.' : ''}</footer>`;
@@ -518,6 +519,11 @@ function viewConfig() {
     <div class="card pad stack"><h3>Idioma</h3><div class="seg wide" role="group" aria-label="Idioma">${LANGS.map(([v, l]) => `<button data-lang="${v}" aria-pressed="${LANG === v}" lang="${v}">${l}</button>`).join('')}</div></div>
     <div class="card pad stack"><h3>Moneda</h3><label for="cur" class="sm mut">Las cantidades de tus apuestas, ganancias y calendario se muestran en esta moneda (no se convierten).</label>
       <select id="cur" class="field">${CURS.map(([c, n]) => `<option value="${c}"${CUR === c ? ' selected' : ''}>${c} · ${n} (${curSym(c)})</option>`).join('')}</select></div>
+    ${GROUP_OK ? `<form id="perfil" class="card pad stack"><h3>Grupo</h3>
+      <label for="pname" class="sm mut">Nombre que ven tus amigos (tu correo no se enseña)</label><input id="pname" class="field" minlength="2" maxlength="24" required value="${esc(myPerfil()?.nombre || (DEMO ? 'Yo' : userEmail.split('@')[0]))}">
+      <label class="chk" for="pshare"><input type="checkbox" id="pshare"${myPerfil()?.compartir ? ' checked' : ''}> <span>Compartir mis apuestas con el grupo: salgo en el ranking y mis tickets se ven en «Grupo»</span></label>
+      <button class="btn ghost" type="submit">Guardar</button><div id="pmsg" class="sm"></div></form>` : ''}
+    ${isAdmin ? '<button class="btn ghost" data-act="valor">¿Acierta el valor? Ver el registro</button>' : ''}
     ${DEMO ? '' : `<div class="card pad stack"><h3>Contraseña</h3><form id="newpass" class="ctl" style="gap:8px"><input id="np" class="field" type="password" minlength="6" required autocomplete="new-password" placeholder="Nueva contraseña (mín. 6)" aria-label="Nueva contraseña" style="flex:1;min-width:0"><button class="btn ghost" type="submit">Guardar</button></form><div id="npmsg" class="sm"></div></div>
     <button class="btn danger" data-act="logout">Cerrar sesión</button>`}
     ${legal()}</div>`;
@@ -913,6 +919,7 @@ function parsePaste(text) {
 function viewAdmin() {
   const rows = S.draft ? parsePaste(S.draft) : [], ok = rows.filter(r => !r.err);
   return `${topBar('', false)}<div class="stack fade"><div><h1>${NFL ? 'Cuotas de la semana' : 'Cuotas de hoy'}</h1><div class="mut sm">${(() => { const v = Object.values(ODDS), a = v.filter(o => o.src === 'auto').length; return `${v.length} cargadas${a ? ` (${a} automáticas, ${v.length - a} tuyas)` : ''}`; })()} · ${esc(updatedTxt())} · solo tú ves esta pestaña</div></div>
+    <button class="btn ghost" data-act="valor">¿Acierta el valor? Ver el registro</button>
     ${oddsCredits ? `<div class="card pad"><b>Cuotas automáticas</b><div class="note">Se actualizan solas a las 18:00 y a las 21:00 con tres fuentes gratis: PropLine primero, y The Odds API y SportsGameOdds para lo que falte. Las que pegues aquí tienen prioridad y el script no las toca.</div>
       <div class="kpis" style="margin-top:10px">${[['PropLine', oddsCredits.propline_restantes, 'consultas hoy', 100], ['The Odds API', oddsCredits.restantes, 'créditos este mes', 60], ['SportsGameOdds', oddsCredits.sgo_eventos, 'eventos usados', null]].map(([n, v, u, low]) => `<div><div class="xs mut">${n}</div><b class="${low != null && v != null && v < low ? 'err' : 'hi'}" style="font-size:18px">${v ?? '–'}</b><div class="xs mut">${u}</div></div>`).join('')}</div></div>` : ''}
     <div class="card pad stack">
@@ -1138,7 +1145,7 @@ async function pollScores() {
 }
 async function pollLive() {
   await pollScores();
-  const ids = [...new Set(BETS.filter(b => !b.result).flatMap(b => b.legs.map(l => l.gameId)).filter(id => id && D.games.some(g => g.id === id)).concat(openGameIds()))];
+  const ids = [...new Set([...BETS, ...(Array.isArray(GBETS) ? GBETS : [])].filter(b => !b.result).flatMap(b => b.legs.map(l => l.gameId)).filter(id => id && D.games.some(g => g.id === id)).concat(openGameIds()))];
   await Promise.all(ids.map(async id => {
     if (LIVE[id]?.state === 'final' && PBP[id]) return;
     try { const box = await fetchLive(id); if (box) { LIVE[id] = box; snapshot(id); } } catch (e) {}
@@ -1225,8 +1232,8 @@ function simulateLive() {
 }
 
 /* ---- historial simulado (modo demostración) ---- */
-function demoHistory() {
-  let a = 77; const R = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+function demoHistory(seed = 77) {
+  let a = seed; const R = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const dates = [...new Set(Object.values(D.teams).flat().map(g => g.date))].sort();
   const last = dates[dates.length - 1], from = isoDay(new Date(new Date(last + 'T00:00:00Z') - 365 * 864e5));
   const ps = Object.values(D.players), out = [];
@@ -1289,7 +1296,7 @@ function profitChart(days) {
   const step = Math.ceil(n / 6); days.forEach((d, i) => { if (i % step === 0 || i === n - 1) s += `<text x="${pl + i * slot + slot / 2}" y="${H - 8}" text-anchor="middle" font-size="9.5" fill="var(--mut)">${esc(d.short)}</text>`; });
   return s + '</svg>';
 }
-function betCard(b) {
+function betCard(b, own = true) {
   const s = betState(b), st = s.st, pay = b.stake * b.odd, open = OPENBETS.has(b.id);
   const pill = st === 'won' ? `<span class="pill good">Ganada ${eurS(b.net ?? betNet(b, st))}</span>` : st === 'lost' ? `<span class="pill bad">Perdida ${eurS(-b.stake)}</span>` : st === 'void' ? '<span class="pill">Nula</span>' : s.legs.some(x => x.txt && x.txt !== 'Aún no ha empezado') ? '<span class="pill acc live">En juego</span>' : '<span class="pill">Pendiente</span>';
   const canOpen = b.legs.some(l => l.type !== 'x'), mixed = new Set(b.legs.filter(l => l.type !== 'x').map(legLiga)).size > 1;
@@ -1300,7 +1307,7 @@ function betCard(b) {
       const note = x.other ? `Se sigue en ${LIGA_N[legLiga(l)]}: cámbialo arriba` : x.txt;
       return `<div class="bleg ${c}"><div class="bl-t"><span class="dot"></span><span class="lbl">${mixed ? `<span class="lg">${LIGA_N[legLiga(l)]}</span>` : ''}${esc(legLabel(l))}</span><b>${esc(now)}</b></div>${open ? '' : bar}${!open && note && l.type !== 'x' ? `<div class="xs mut">${esc(note)}</div>` : ''}</div>`; }).join('');
   return `<div class="bet ${st || 'open'}${open ? ' expanded' : ''}">
-    <div class="bet-h"><div><b>${b.legs.length > 1 ? `Combinada · ${b.legs.length}` : 'Simple'}</b><div class="xs mut">${eur(b.stake)} a ${dec(b.odd, 2)} · cobra ${eur(pay)}</div></div>${pill}<button class="x" data-share="${esc(b.id)}" aria-label="Compartir ticket" title="Compartir ticket">${ICON.share}</button>${!b.result && !b.seed ? `<button class="x" data-delbet="${esc(b.id)}" aria-label="Borrar apuesta">×</button>` : ''}</div>
+    <div class="bet-h"><div><b>${b.legs.length > 1 ? `Combinada · ${b.legs.length}` : 'Simple'}</b><div class="xs mut">${eur(b.stake)} a ${dec(b.odd, 2)} · cobra ${eur(pay)}</div></div>${pill}<button class="x" data-share="${esc(b.id)}" aria-label="Compartir ticket" title="Compartir ticket">${ICON.share}</button>${own && !b.result && !b.seed ? `<button class="x" data-delbet="${esc(b.id)}" aria-label="Borrar apuesta">×</button>` : ''}</div>
     ${canOpen ? `<button class="bet-tg" data-tbet="${esc(b.id)}" aria-expanded="${open}">${legs}<span class="more">${open ? 'Ocultar el directo' : 'Ver marcador y jugadores en directo'}${ICON.chev}</span></button>` : `<div class="bet-legs">${legs}</div>`}
     ${open ? betLive(b, s) : ''}
   </div>`;
@@ -1475,7 +1482,9 @@ function calendar(netMap) {
     <div class="row-between"><button class="ic" data-calnav="-1" aria-label="Mes anterior">${ICON.back}</button><div style="text-align:center"><b>${esc(title.charAt(0).toUpperCase() + title.slice(1))}</b><div class="xs ${monthNet > 0 ? 'ok' : monthNet < 0 ? 'err' : 'mut'}">${eurS(monthNet)}</div></div><button class="ic flip" data-calnav="1" aria-label="Mes siguiente">${ICON.back}</button></div>
     <div class="cal">${Array.from({ length: 7 }, (_, i) => `<em>${new Date(Date.UTC(2024, 0, 1 + i)).toLocaleDateString(LOC, { weekday: 'narrow', timeZone: 'UTC' }).toUpperCase()}</em>`).join('')}${cells}</div></div>`;
 }
+const betsTabs = () => `<div class="seg wide" role="group" aria-label="Apuestas">${[['mias', 'Mías'], ['grupo', 'Grupo']].map(([v, l]) => `<button data-btab="${v}" aria-pressed="${(S.btab || 'mias') === v}">${l}</button>`).join('')}</div>`;
 function viewBets() {
+  if (S.btab === 'grupo') return `${topBar('', false)}<div class="stack fade"><div><h1>Grupo</h1><div class="mut sm">Ranking y tickets de quienes comparten sus apuestas.</div></div>${betsTabs()}${groupView()}${legal()}</div>`;
   settleAll();
   const today = refDay(), netMap = dailyNet();
   const [, , nDays] = RANGES.find(r => r[0] === S.range);
@@ -1492,7 +1501,8 @@ function viewBets() {
   const open = BETS.filter(b => !b.result || b.date === today).sort((a, b) => a.created < b.created ? 1 : -1);
   const dayBets = S.calDay ? BETS.filter(b => b.date === S.calDay) : [];
   return `${topBar('', false)}<div class="stack fade">
-    <div><h1>Mis apuestas</h1><div class="mut sm">Solo las ves tú.</div></div>
+    <div><h1>Mis apuestas</h1><div class="mut sm">${myPerfil()?.compartir ? 'Las compartes con el grupo.' : 'Solo las ves tú.'}</div></div>
+    ${betsTabs()}
     <div class="seg wide" role="group" aria-label="Periodo">${RANGES.map(([v, l]) => `<button data-range="${v}" aria-pressed="${S.range === v}">${l}</button>`).join('')}</div>
     <div class="kpis"><div><b class="${net > 0 ? 'ok' : net < 0 ? 'err' : ''}">${eurS(net)}</b><span>beneficio</span></div><div><b>${staked ? dec(net / staked * 100, 1) + ' %' : '–'}</b><span>rentabilidad · ${eur(staked)} apostados</span></div><div><b>${closed.length ? pct(wins / closed.length) : '–'}</b><span>acertadas · ${wins} de ${closed.length}</span></div></div>
     <div class="card"><div class="chartbox">${profitChart(series)}</div><div class="pad" style="padding-top:0"><div class="note">Barras: ganancia o pérdida ${S.range === 'day' ? 'de cada apuesta' : nDays > 120 ? 'de cada mes' : nDays > 31 ? 'de cada semana' : 'de cada día'}. Línea ámbar: acumulado.</div></div></div>
@@ -1506,10 +1516,135 @@ function viewBets() {
     ${legal()}</div>`;
 }
 
+/* ---------- ¿acierta el valor? ----------
+   Antes de cada partido, la app del administrador guarda en la tabla «valor» cada apuesta con cuota: lado, línea,
+   cuota y lo que daban el modelo y la cuota. Después se mira cómo salió con los datos de cada día y qué habría pasado
+   apostando 1 unidad a cada una. Así se sabe si «Con valor» acierta de verdad o es suerte. */
+const VAL_MIN = 3;   // «Con valor» empieza en +3 (como en el resto de la app)
+function gameStarted(g) {
+  const sc = SCORES[g.id] || LIVE[g.id]; if (sc && sc.state && sc.state !== 'pre') return true;
+  const ms = gameTime(g).ms; return ms != null && Date.now() >= ms;
+}
+function valueRows() {
+  return [...propRows('players', 'all', 'l10'), ...propRows('games')].map(r => {
+    if (r.type === 'p') { const g = gameOfTeam(r.p.team); return g && { clave: lineKey(r.p.id, r.k), tipo: 'p', pid: r.p.id, name: r.p.name, team: r.p.team, stat: r.k, line: r.line, side: r.b.side, odd: r.b.eo.v, p: r.b.p, imp: r.b.imp, edge: r.b.edge, gameId: g.id, date: g.date, label: `${r.p.name} · ${r.b.side === 'over' ? 'más' : 'menos'} de ${dec(r.line)} ${SK[r.k].l}` }; }
+    return { clave: r.ev.key, tipo: 'g', market: r.m, team: r.tm, home: r.g.home, away: r.g.away, line: r.line, side: r.side, odd: r.ev.eo.v, p: r.ev.pModel, imp: r.ev.imp, edge: r.ev.edge, gameId: r.g.id, date: r.g.date, label: `${marketLabel(r.g, r.m, r.tm, r.side, r.line)} (${r.g.away} @ ${r.g.home})` };
+  }).filter(x => x && x.odd > 1 && x.p != null && x.imp != null);
+}
+let VALOR_OK = true;
+async function recordValue() {
+  if (DEMO || !isAdmin || !VALOR_OK || !sb) return;
+  const rows = valueRows().filter(x => { const g = findGame(x.gameId); return g && !gameStarted(g); });
+  if (!rows.length) return;
+  const now = new Date().toISOString();
+  const { error } = await sb.from('valor').upsert(rows.map(x => ({ fecha: x.date, liga: LIGA, clave: x.clave, datos: x, actualizado: now })));
+  if (error) { VALOR_OK = false; console.warn('Registro del valor', error.message); }
+}
+/* 'won' | 'lost' | 'void' | null (aún sin resultado). Un jugador que no jugó (su equipo sí) cuenta como nula. */
+function valueResult(x) {
+  const st = legState({ ...x, type: x.tipo, liga: LIGA }, x.date).st;
+  if (st || x.tipo !== 'p') return st;
+  return tGames(x.team).some(t => t.date === x.date && t.date < todayET()) ? 'void' : null;
+}
+let VALOR = null;   // filas registradas de esta liga | 'loading' | 'error'
+async function loadValor() {
+  VALOR = 'loading';
+  if (DEMO) VALOR = demoValor();
+  else { const r = await pages(() => sb.from('valor').select('datos').eq('liga', LIGA).order('fecha')); VALOR = r.error ? 'error' : r.data.map(x => x.datos); }
+  if (S.view === 'valor') render();
+}
+function valorStats(rows) {
+  const c = rows.filter(x => x.res === 'won' || x.res === 'lost'), w = c.filter(x => x.res === 'won').length;
+  const units = c.reduce((a, x) => a + (x.res === 'won' ? x.odd - 1 : -1), 0);
+  return { n: c.length, w, hit: c.length ? w / c.length : null, exp: c.length ? mean(c.map(x => x.p)) : null, units, roi: c.length ? units / c.length : null };
+}
+const units = u => `${u > 0 ? '+' : u < 0 ? '−' : ''}${dec(Math.abs(u), 1)} u`;
+function viewValor() {
+  const head = `${topBar('¿Acierta el valor?', true)}<div class="stack fade">`;
+  if (VALOR == null) loadValor();
+  if (VALOR == null || VALOR === 'loading') return head + '<div class="card empty">Cargando…</div></div>';
+  if (VALOR === 'error') return head + `<div class="card empty"><b>Falta crear el registro</b>Ejecuta supabase_valor_grupo.sql en Supabase > SQL Editor (una sola vez).</div>${legal()}</div>`;
+  const rows = VALOR.map(x => ({ ...x, res: valueResult(x) })), closed = rows.filter(x => x.res === 'won' || x.res === 'lost'), pend = rows.filter(x => !x.res).length;
+  const V0 = valorStats(rows.filter(x => x.edge >= VAL_MIN));
+  const groups = [['Con valor (+3 o más)', x => x.edge >= VAL_MIN], ['+3 a +5', x => x.edge >= 3 && x.edge < 5], ['+5 a +10', x => x.edge >= 5 && x.edge < 10], ['+10 o más', x => x.edge >= 10],
+    ['Props de jugadores', x => x.tipo === 'p' && x.edge >= VAL_MIN], ['Mercados de partido', x => x.tipo === 'g' && x.edge >= VAL_MIN], ['Justo o sin valor (menos de +3)', x => x.edge < VAL_MIN]];
+  const brier = f => closed.length ? mean(closed.map(x => (f(x) - (x.res === 'won' ? 1 : 0)) ** 2)) : null, bm = brier(x => x.p), bc = brier(x => x.imp);
+  const first = rows.map(x => x.date).sort()[0];
+  const last = rows.filter(x => x.edge >= VAL_MIN && (x.res === 'won' || x.res === 'lost' || x.res === 'void')).sort((a, b) => a.date < b.date ? 1 : -1).slice(0, 15);
+  return head + `<div><h1>¿Acierta el valor?</h1><div class="mut sm">${first ? `Registro ${LIGA.toUpperCase()} desde el ${fdate(new Date(first + 'T00:00:00Z'))}` : 'Aún no hay nada registrado'} · ${closed.length} cerradas · ${pend} pendientes</div></div>
+    <div class="kpis"><div><b>${V0.n}</b><span>apuestas con valor cerradas</span></div><div><b class="${V0.hit != null && V0.exp != null ? (V0.hit >= V0.exp ? 'ok' : 'err') : ''}">${pct(V0.hit)}</b><span>acertadas · el modelo esperaba ${pct(V0.exp)}</span></div><div><b class="${V0.units > 0 ? 'ok' : V0.units < 0 ? 'err' : ''}">${units(V0.units)}</b><span>beneficio con 1 u por apuesta · ${V0.roi != null ? signed(V0.roi * 100) + ' %' : '–'}</span></div></div>
+    ${V0.n < 200 ? `<p class="note">Aún son pocas: con menos de ~200 apuestas cerradas el resultado depende mucho de la suerte. Déjalo correr unas semanas.</p>` : ''}
+    <div class="card"><div class="tbl"><table><thead><tr><th class="l">Grupo</th><th>Apuestas</th><th>Acierto</th><th>Esperado</th><th>Beneficio</th><th>Rentab.</th></tr></thead><tbody>
+      ${groups.map(([n, f]) => { const st = valorStats(rows.filter(f)); return `<tr><td class="l">${esc(n)}</td><td>${st.n}</td><td>${pct(st.hit)}</td><td>${pct(st.exp)}</td><td class="${st.units > 0 ? 'ok' : st.units < 0 ? 'err' : ''}">${st.n ? units(st.units) : '–'}</td><td>${st.roi != null ? signed(st.roi * 100) + ' %' : '–'}</td></tr>`; }).join('')}
+    </tbody></table></div><div class="pad" style="padding-top:0"><p class="note" style="margin:0">Beneficio: lo que habrías ganado o perdido apostando 1 unidad a cada una con la cuota de ese día. Esperado: el % de acierto que daba el modelo, de media.</p></div></div>
+    <div class="card pad"><h3>Modelo frente a la cuota</h3><p class="sm" style="margin:8px 0 0">${bm == null ? 'Aún no hay apuestas cerradas.' : `Error del modelo ${dec(bm, 3)} · error de la cuota ${dec(bc, 3)} (cuanto más bajo, mejor). ${bm < bc ? 'El modelo está acertando más que la cuota.' : 'La cuota está acertando más que el modelo.'}`}</p></div>
+    ${last.length ? `<div class="sec-h"><h3>Últimas con valor</h3></div><div class="card">${last.map(x => `<div class="prow"><div style="min-width:0"><div class="nm">${esc(x.label)}</div><div class="mut xs">${fdate(new Date(x.date + 'T00:00:00Z'))} · cuota ${dec(x.odd, 2)} · valor ${edgeTxt(x.edge)}</div></div><div class="rt"><span class="pill ${x.res === 'won' ? 'good' : x.res === 'lost' ? 'bad' : ''}">${x.res === 'won' ? 'Cumplida' : x.res === 'lost' ? 'Fallada' : 'Nula'}</span></div></div>`).join('')}</div>` : ''}
+    <p class="note">La app guarda estos datos sola cada vez que el administrador la abre antes de los partidos (después de que se carguen las cuotas a las 18:00 o a las 21:00).</p>
+    ${legal()}</div>`;
+}
+/* Registro simulado para la demo: líneas = mediana de los 10 partidos anteriores y resultados reales de la demo. */
+function demoValor() {
+  let a = 91; const R = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const out = [], dates = [...new Set(Object.values(D.teams).flat().map(g => g.date))].sort().slice(-30);
+  for (const d of dates) for (const pl of Object.values(D.players)) {
+    const i = pl.log.findIndex(g => g.date === d); if (i < 10 || R() < .5) continue;
+    const k = NFL ? LG.posStat[pl.pos] || 'rec' : ['pts', 'reb', 'ast', 'fg3m', 'pra'][Math.floor(R() * 5)];
+    const prev = pl.log.slice(i - 10, i).map(g => val(g, k)), line = Math.floor(median(prev)) + .5, mu = mean(prev), sd = Math.sqrt(mean(prev.map(v => (v - mu) ** 2))) + 1;
+    const pO = Math.min(.85, Math.max(.15, Phi((mu - line) / sd))), iO = Math.min(.8, Math.max(.2, .5 + (R() - .5) * .16)), side = pO >= iO ? 'over' : 'under';
+    const pm = side === 'over' ? pO : 1 - pO, imp = side === 'over' ? iO : 1 - iO;
+    out.push({ clave: lineKey(pl.id, k), tipo: 'p', pid: pl.id, name: pl.name, team: pl.team, stat: k, line, side, odd: Math.round(100 / (imp * 1.045)) / 100, p: pm, imp, edge: edgeOf(pm, imp), date: d, label: `${pl.name} · ${side === 'over' ? 'más' : 'menos'} de ${dec(line)} ${SK[k].l}` });
+  }
+  return out;
+}
+
+/* ---------- grupo: ranking y tickets compartidos ----------
+   Cada uno decide en Configuración si comparte sus apuestas (tabla «perfiles»). La base de datos solo deja leer
+   las apuestas de quien comparte. El correo nunca se enseña: sale el nombre que cada uno elige. */
+let PERFILES = null, GROUP_OK = true, GBETS = null;   // perfiles del grupo | apuestas compartidas de los demás
+const myPerfil = () => (PERFILES || []).find(x => x.user_id === userId) || null;
+async function loadPerfiles() {
+  if (DEMO) { PERFILES = [{ user_id: 'demo-marco', nombre: 'Marco', compartir: true, moneda: 'EUR' }, { user_id: 'demo-lucia', nombre: 'Lucía', compartir: true, moneda: 'EUR' }, { user_id: 'demo-dani', nombre: 'Dani', compartir: true, moneda: 'USD' }];
+    const me = store.get('perfil', null); if (me) PERFILES.push(me); return; }
+  const r = await sb.from('perfiles').select('user_id,nombre,compartir,moneda');
+  if (r.error) { GROUP_OK = false; PERFILES = []; } else PERFILES = r.data || [];
+}
+async function savePerfil(pf) {
+  pf = { ...pf, actualizado: new Date().toISOString() };
+  if (!DEMO) { const { error } = await sb.from('perfiles').upsert(pf); if (error) return error.message; } else store.set('perfil', pf);
+  PERFILES = [...(PERFILES || []).filter(x => x.user_id !== pf.user_id), pf]; GBETS = null; return null;
+}
+async function loadGroupBets() {
+  GBETS = 'loading';
+  if (DEMO) GBETS = PERFILES.filter(x => x.user_id !== userId).flatMap((pf, i) => demoHistory(101 + i * 17).map(b => ({ ...b, id: pf.user_id + b.id, owner: pf.user_id })));
+  else { const r = await pages(() => sb.from('apuestas').select('user_id,data').neq('user_id', userId).order('created_at', { ascending: false })); GBETS = r.error ? [] : (r.data || []).map(x => ({ ...x.data, owner: x.user_id })); }
+  if (S.view === 'bets') render();
+}
+/* Cada uno apunta en su moneda: sus cantidades se enseñan con su símbolo, sin convertir. */
+function withCur(c, fn) { const k = CUR; CUR = c || k; try { return fn(); } finally { CUR = k; } }
+function groupView() {
+  if (!GROUP_OK) return `<div class="card empty"><b>El grupo aún no está activado</b>${isAdmin ? 'Ejecuta supabase_valor_grupo.sql en Supabase > SQL Editor (una sola vez).' : 'El administrador tiene que activarlo.'}</div>`;
+  if (GBETS == null) loadGroupBets();
+  const me = myPerfil(), RG = [['week', 'Semana', 7], ['month', 'Mes', 30], ['year', 'Año', 365]], [, , nd] = RG.find(r => r[0] === (S.gRange || 'month'));
+  const since = isoDay(new Date(new Date(refDay() + 'T00:00:00Z') - (nd - 1) * 864e5));
+  const others = Array.isArray(GBETS) ? GBETS : [];
+  const people = (PERFILES || []).filter(x => x.compartir && x.user_id !== userId).map(pf => ({ pf, bets: others.filter(b => b.owner === pf.user_id) }));
+  if (me?.compartir) people.push({ pf: me, bets: BETS, me: true });
+  const rows = people.map(x => { const c = x.bets.filter(b => b.result && b.date >= since), st = c.reduce((a, b) => a + b.stake, 0), net = c.reduce((a, b) => a + (b.net || 0), 0), w = c.filter(b => b.result === 'won').length;
+    return { ...x, n: c.length, w, net, roi: st ? net / st : null }; }).sort((a, b) => (b.roi ?? -1e9) - (a.roi ?? -1e9));
+  const wall = people.flatMap(x => x.bets.map(b => ({ b, x }))).sort((a, b) => a.b.created < b.b.created ? 1 : -1).slice(0, 20);
+  return `${me?.compartir ? '' : `<div class="card pad stack"><b>Comparte tus apuestas para salir en el ranking</b><div class="note">Se activa en Configuración. Solo se ve el nombre que elijas, nunca tu correo.</div><button class="btn ghost" data-nav="config">Ir a Configuración</button></div>`}
+    <div class="sec-h"><h3>Ranking</h3><div class="seg" role="group" aria-label="Periodo">${RG.map(([v, l]) => `<button data-grange="${v}" aria-pressed="${(S.gRange || 'month') === v}">${l}</button>`).join('')}</div></div>
+    ${GBETS === 'loading' ? '<div class="card empty">Cargando…</div>' : rows.length ? `<div class="card"><div class="tbl"><table class="rank"><thead><tr><th class="l">#</th><th class="l">Nombre</th><th>Apuestas</th><th>Acertadas</th><th>Beneficio</th><th>Rentab.</th></tr></thead><tbody>
+      ${rows.map((r, i) => `<tr${r.me ? ' class="me"' : ''}><td class="l">${i + 1}</td><td class="l"><b>${esc(r.pf.nombre)}</b>${r.me ? ' <span class="mut xs">(tú)</span>' : ''}</td><td>${r.n}</td><td>${r.n ? pct(r.w / r.n) : '–'}</td><td class="${r.net > 0 ? 'ok' : r.net < 0 ? 'err' : ''}">${withCur(r.pf.moneda, () => eurS(r.net))}</td><td>${r.roi != null ? signed(r.roi * 100) + ' %' : '–'}</td></tr>`).join('')}
+    </tbody></table></div><div class="pad" style="padding-top:0"><p class="note" style="margin:0">Ordenado por rentabilidad (beneficio entre lo apostado), así no gana quien más dinero mueve. Cada uno en su moneda.</p></div></div>`
+    : '<div class="card empty"><b>Nadie comparte todavía</b>Cuando alguien active «Compartir mis apuestas», saldrá aquí.</div>'}
+    ${wall.length ? `<div class="sec-h"><h3>Últimos tickets</h3></div><div class="stack">${wall.map(({ b, x }) => `<div class="who-bet">${profilePic(26)}<b>${esc(x.pf.nombre)}</b>${x.me ? ' <span class="mut xs">(tú)</span>' : ''}</div>${withCur(x.pf.moneda, () => betCard(b, !!x.me))}`).join('')}</div>` : ''}`;
+}
+
 /* ---------- render ---------- */
 function render() {
   if (!D) return;
-  const v = { hoy: viewHoy, game: viewGame, player: viewPlayer, props: viewProps, slip: viewSlip, bets: viewBets, admin: viewAdmin, config: viewConfig }[S.view] || viewHoy;
+  const v = { hoy: viewHoy, game: viewGame, player: viewPlayer, props: viewProps, slip: viewSlip, bets: viewBets, admin: viewAdmin, config: viewConfig, valor: viewValor }[S.view] || viewHoy;
   const ae = document.activeElement, keep = ae && ae.id ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd } : null;
   const anim = ANIM;
   const fut = S.view === 'game' && findGame(S.gameId)?.future, saved = ODDS;
@@ -1556,6 +1691,8 @@ app.addEventListener('click', async e => {
   if (d.range) { S.range = d.range; return render(); }
   if (d.calnav) { const [y, m] = S.calMonth.split('-').map(Number), n = new Date(Date.UTC(y, m - 1 + +d.calnav, 1)); S.calMonth = isoDay(n).slice(0, 7); S.calDay = null; return render(); }
   if (d.calday) { S.calDay = S.calDay === d.calday ? null : d.calday; return render(); }
+  if (d.btab) { S.btab = d.btab; return render(); }
+  if (d.grange) { S.gRange = d.grange; return render(); }
   if (d.share) { const bt = BETS.find(x => x.id === d.share); if (bt) { b.disabled = true; shareBet(bt).catch(err => { console.warn('Compartir', err); alert(window.TRIBUNA_I18N?.tr('No se pudo crear la imagen.') || 'No se pudo crear la imagen.'); }).finally(() => { b.disabled = false; }); } return; }
   if (d.tbet) { if (OPENBETS.has(d.tbet)) OPENBETS.delete(d.tbet); else { OPENBETS.add(d.tbet); if (!DEMO) pollLive(); } return render(); }
   if (d.tbox) { if (OPENBOX.has(d.tbox)) OPENBOX.delete(d.tbox); else OPENBOX.add(d.tbox); return render(); }
@@ -1577,6 +1714,7 @@ app.addEventListener('click', async e => {
   if (act === 'add-ml') { const g = findGame(S.gameId), tm = S.mTeam === 'home' ? g.home : g.away, ev = marketEval(g, 'ml', tm, 'over', 0);
     slip = slip.filter(l => !(l.type === 'g' && l.gameId === g.id && l.market === 'ml')); addLeg({ type: 'g', gameId: g.id, market: 'ml', team: tm, side: 'over', line: 0, odd: ev.eo.v }); return render(); }
   if (act === 'logout') { await sb.auth.signOut(); D = null; BETS = []; location.reload(); return; }
+  if (act === 'valor') return go('valor');
   if (act === 'sim-live') { simulateLive(); return render(); }
   if (act === 'clear-slip') { slip = []; saveUser(); return render(); }
   if (act === 'example' && NFL) { S.draft = 'Mahomes pyd 265,5 1,87 1,93\nKelce rec 5,5 1,90 1,90\nAllen pry 285,5 1,90 1,90\nKC ganador 1,45\nBUF ganador 2,80\nKC handicap -6,5 1,90\nBUF@KC total 47,5 1,90 1,90\nKC puntos 26,5 1,88 1,92'; S.msg = ''; return render(); }
@@ -1593,7 +1731,7 @@ app.addEventListener('change', e => {
     if (t.id === 'godd') { const sd = S.market === 'total' || S.market === 'pts' ? getSide(key) : 'over'; if (v > 1) uOdds[key + '|' + sd] = Math.round(v * 100) / 100; else delete uOdds[key + '|' + sd]; }
     saveUser(); render(); }
   if (t.id === 'rest') { S.rest = t.value; render(); }
-  if (t.id === 'cur') { CUR = t.value; store.set('cur', CUR); render(); }
+  if (t.id === 'cur') { CUR = t.value; store.set('cur', CUR); if (myPerfil()) savePerfil({ ...myPerfil(), moneda: CUR }); render(); }
   if (t.id === 'minr') { S.minMin = +t.value; render(); }
 });
 let pasteT;
@@ -1611,6 +1749,13 @@ app.addEventListener('submit', async e => {
     const b = { id: newId(), date, created: new Date().toISOString(), stake: Math.round(stake * 100) / 100, odd: Math.round(odd * 100) / 100, legs };
     BETS.push(b); slip = []; S.stake = ''; S.betOdd = ''; saveUser(); persistBets([b]); startLive();
     S.calDay = null; return go('bets');
+  }
+  if (e.target.id === 'perfil') {
+    e.preventDefault(); const nombre = document.getElementById('pname').value.trim(), compartir = document.getElementById('pshare').checked;
+    if (nombre.length < 2) return;
+    const err = await savePerfil({ user_id: userId, nombre, compartir, moneda: CUR });
+    const out = document.getElementById('pmsg'); if (out) out.textContent = err ? 'No se pudo guardar: ' + err : compartir ? 'Guardado. Tus apuestas ya se ven en «Grupo».' : 'Guardado. Tus apuestas son solo tuyas.';
+    return;
   }
   if (e.target.id === 'join') { e.preventDefault(); pendingCode = document.getElementById('code').value.trim(); return boot(); }
   if (e.target.id === 'groupcode') {
@@ -1648,6 +1793,8 @@ async function saveFondo() {
   if (url) FONDOS[pid] = url; else delete FONDOS[pid]; render();
 }
 
+/* Supabase devuelve como mucho 1.000 filas por consulta: se piden por páginas. */
+const pages = async q => { const out = []; for (let i = 0; ; i += 1000) { const r = await q().range(i, i + 999); if (r.error) return { data: out.length ? out : null, error: r.error }; out.push(...(r.data || [])); if (!r.data || r.data.length < 1000) return { data: out, error: null }; } };
 /* ---------- cuotas: guardar ---------- */
 const ODDS_PRE = NFL ? 'nfl:' : '';
 const oddsOfLiga = q => NFL ? q.like('player_id', 'nfl:%') : q.not('player_id', 'like', 'nfl:%');
@@ -1664,7 +1811,7 @@ async function saveOdds() {
       if (error) throw error;
       rows.forEach(r => ODDS[r.entity + '|' + r.stat] = { line: r.line, over: r.over, under: r.under });
     }
-    S.draft = ''; S.msg = `Guardadas ${rows.length} cuotas. Tus amigos ya las ven.`;
+    S.draft = ''; S.msg = `Guardadas ${rows.length} cuotas. Tus amigos ya las ven.`; recordValue();
   } catch (err) { S.msg = 'Error al guardar: ' + (err.message || err); }
   S.saving = false; render();
 }
@@ -1681,6 +1828,7 @@ async function boot() {
     D = prepare(demo.data); ODDS = store.get('demo-odds', null) || demo.odds; isAdmin = true;
     { const g0 = D.games[0]; if (g0) { const top = t => Object.values(D.players).filter(p => p.team === t).sort((a, b) => b.avgMin - a.avgMin); const [a] = top(g0.home), [, b] = top(g0.away); if (a) BAJAS[a.id] = { status: 'out', note: 'Ejemplo de la demo: baja por lesión en el tobillo.' }; if (b) BAJAS[b.id] = { status: 'questionable', note: 'Ejemplo de la demo: en duda.' }; BAJAS_AT = new Date().toISOString(); } } Object.assign(FONDOS, store.get('fondos', {}));
     BETS = [...demoHistory(), ...store.get('bets', [])]; S.calMonth = refDay().slice(0, 7);
+    await loadPerfiles();
     return render();
   }
   if (booting) return; booting = true;
@@ -1695,7 +1843,7 @@ async function bootReal() {
   sb = sb || window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, { auth: { detectSessionInUrl: false } });
   const { data: { session } } = await sb.auth.getSession();
   if (!session) { app.innerHTML = `<div class="shell">${viewLogin('')}</div>`; return; }
-  userEmail = session.user.email || '';
+  userEmail = session.user.email || ''; userId = session.user.id;
   // Grupo: si la base de datos ya tiene el control de miembros, hay que haber metido el código.
   if (pendingCode) { const j = await sb.rpc('unirse', { codigo: pendingCode }); pendingCode = ''; if (!j.error && j.data === false) { app.innerHTML = `<div class="shell">${viewJoin('Ese código no es correcto.')}</div>`; return; } }
   const mem = await sb.rpc('es_miembro');
@@ -1708,15 +1856,17 @@ async function bootReal() {
   if (isAdmin) { const gc = await sb.from('ajustes').select('valor').eq('clave', 'codigo_grupo').maybeSingle(); groupCode = gc.data?.valor ?? null; }
   const gd = D.games[0]?.date || todayET();
   /* Supabase devuelve como mucho 1.000 filas por consulta y una noche puede tener ~2.000 cuotas: se piden por páginas. */
-  const allRows = async q => { const out = []; for (let i = 0; ; i += 1000) { const r = await q().range(i, i + 999); if (r.error) return { data: out.length ? out : null, error: r.error }; out.push(...(r.data || [])); if (!r.data || r.data.length < 1000) return { data: out, error: null }; } };
+  const allRows = pages;
   const [od, fd] = await Promise.all([allRows(() => oddsOfLiga(sb.from('odds').select('*').eq('game_date', gd)).order('player_id').order('stat')), sb.from('fondos').select('player_id,url')]);
   (fd.data || []).forEach(r => FONDOS[r.player_id] = r.url);
-  const ap = await allRows(() => sb.from('apuestas').select('data').order('created_at', { ascending: true }));
+  const ap = await allRows(() => sb.from('apuestas').select('data').eq('user_id', userId).order('created_at', { ascending: true }));
   BETS = (ap.data || []).map(r => r.data); S.calMonth = refDay().slice(0, 7);
   startLive();   // marcador de la pantalla principal y apuestas en juego, cada 30 s
   ODDS = {}; (od.data || []).forEach(r => ODDS[r.player_id.slice(ODDS_PRE.length) + '|' + r.stat] = { line: r.line == null ? null : +r.line, over: r.over_odd == null ? null : +r.over_odd, under: r.under_odd == null ? null : +r.under_odd, src: r.fuente || 'manual', at: r.updated_at });
   if (isAdmin) { const cr = await sb.from('ajustes').select('valor').eq('clave', NFL ? 'creditos_odds_nfl' : 'creditos_odds').maybeSingle(); try { oddsCredits = cr.data ? JSON.parse(cr.data.valor) : null; } catch (e) { oddsCredits = null; } }
+  await loadPerfiles();
   render();
+  recordValue();   // administrador: guarda lo que dice el modelo antes de los partidos
 }
 boot().catch(err => { app.innerHTML = `<div class="shell"><div class="card empty" style="margin-top:20vh"><b>Algo ha fallado</b>${esc(err.message || err)}</div></div>`; });
 })();

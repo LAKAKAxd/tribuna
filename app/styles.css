@@ -466,3 +466,7 @@ table.box th,table.box td{padding:6px 7px}
 .sharebox img{width:100%;display:block;border-radius:12px}
 .sh-btns{display:flex;gap:8px}.sh-btns .btn{flex:1;text-align:center;text-decoration:none}
 .bet-h .x:disabled{opacity:.4}
+/* Grupo y registro del valor */
+.who-bet{display:flex;align-items:center;gap:8px;margin:6px 2px -4px;font-size:13.5px}
+.rank tr.me td{background:var(--acc-soft)}
+.chk{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;line-height:1.35}.chk input{margin-top:3px;width:18px;height:18px;accent-color:var(--acc);flex:none}
