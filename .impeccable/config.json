@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "app/index.html"
+        ],
+        "createdAt": "2026-11-17T11:18:30.100Z",
+        "reason": "Claude: the pulsing dots are the EN VIVO / En juego live-game indicators, driven by ESPN live scores updated every 30 s (genuinely live data)"
+      }
+    ]
+  }
+}
