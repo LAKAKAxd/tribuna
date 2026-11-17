@@ -102,6 +102,9 @@ window.TRIBUNA_I18N = (function () {
     ['Ver todos los jugadores del partido', 'Vedi tutti i giocatori della partita', 'See all players in the game'], ['Ocultar todos los jugadores del partido', 'Nascondi tutti i giocatori della partita', 'Hide all players in the game'],
     ['Sin datos todavía.', 'Ancora nessun dato.', 'No data yet.'], ['Aún no ha empezado', 'Non è ancora iniziata', 'Not started yet'], ['Aún no ha jugado', 'Non ha ancora giocato', 'Has not played yet'], ['Cumplida', 'Vinta', 'Won'], ['Fallada', 'Persa', 'Lost'],
     ['Ya la supera', 'L\'ha già superata', 'Already over'], ['en pista', 'in campo', 'on court'], ['Empate', 'Pareggio', 'Tie'], ['Sin apuestas ese día.', 'Nessuna scommessa quel giorno.', 'No bets that day.'], ['Mes anterior', 'Mese precedente', 'Previous month'], ['Mes siguiente', 'Mese successivo', 'Next month'],
+    ['Compartir ticket', 'Condividi schedina', 'Share ticket'], ['Compartir', 'Condividi', 'Share'], ['Descargar', 'Scarica', 'Download'], ['Cerrar', 'Chiudi', 'Close'],
+    ['No se pudo crear la imagen.', 'Impossibile creare l\'immagine.', 'Could not create the image.'],
+    ['+18 · Juega solo lo que puedas permitirte perder.', '+18 · Gioca solo ciò che puoi permetterti di perdere.', '18+ · Only bet what you can afford to lose.'],
     ['Evolución durante el partido', 'Andamento durante la partita', 'Progress during the game'],
     // cuotas (admin)
     ['Cuotas de hoy', 'Quote di oggi', 'Today\'s odds'], ['Cuotas de la semana', 'Quote della settimana', 'This week\'s odds'], ['Cuotas automáticas', 'Quote automatiche', 'Automatic odds'], ['consultas hoy', 'richieste oggi', 'requests today'], ['créditos este mes', 'crediti questo mese', 'credits this month'], ['eventos usados', 'eventi usati', 'events used'],
@@ -219,5 +222,5 @@ window.TRIBUNA_I18N = (function () {
     document.documentElement.lang = lang;
     new MutationObserver(ms => { for (const m of ms) m.addedNodes.forEach(walk); }).observe(document.getElementById('app'), { childList: true, subtree: true });
   }
-  return { tr };
+  return { tr, walk };
 })();

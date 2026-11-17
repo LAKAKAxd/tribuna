@@ -68,7 +68,7 @@ window.TRIBUNA_ESPN = (function () {
           const [fgm, fga] = pair(at(s, 'FG', 'fieldGoalsMade-fieldGoalsAttempted')), [fg3m, fg3a] = pair(at(s, '3PT', 'threePointFieldGoalsMade-threePointFieldGoalsAttempted')), [ftm, fta] = pair(at(s, 'FT', 'freeThrowsMade-freeThrowsAttempted'));
           const n = (l, k) => +(at(s, l, k) || 0) || 0, min = n('MIN', 'minutes');
           out[map(ath.id, ath.displayName, tm)] = { pts: n('PTS', 'points'), reb: n('REB', 'rebounds'), ast: n('AST', 'assists'), stl: n('STL', 'steals'), blk: n('BLK', 'blocks'), tov: n('TO', 'turnovers'),
-            fgm, fga, fg3m, fg3a, ftm, fta, min, nm: ath.shortName || ath.displayName || '', tm, on: false, pl: !a.didNotPlay && (min > 0 || s.length > 0) };
+            fgm, fga, fg3m, fg3a, ftm, fta, min, nm: ath.shortName || ath.displayName || '', eid: ath.id, tm, on: false, pl: !a.didNotPlay && (min > 0 || s.length > 0) };
         }
       }
     }
@@ -109,7 +109,7 @@ window.TRIBUNA_ESPN = (function () {
         const cols = COLS[grp.name]; if (!cols) continue;
         const lab = (grp.labels || []).map(x => String(x).toUpperCase());
         for (const a of grp.athletes || []) {
-          const ath = a.athlete || {}, id = map(ath.id, ath.displayName, tm), o = out[id] || (out[id] = { ...zero(), nm: ath.shortName || ath.displayName || '', tm, on: false, pl: true });
+          const ath = a.athlete || {}, id = map(ath.id, ath.displayName, tm), o = out[id] || (out[id] = { ...zero(), nm: ath.shortName || ath.displayName || '', eid: ath.id, tm, on: false, pl: true });
           lab.forEach((l, i) => { const k = cols[l], v = (a.stats || [])[i]; if (!k) return;
             if (k === 'c/att') { const m = /^(\d+)\/(\d+)$/.exec(String(v || '')); if (m) { o.cmp = +m[1]; o.att = +m[2]; } }
             else o[k] = +v || 0; });

@@ -56,6 +56,7 @@ const ICON = {
   props: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V10M10 20V4M15 20v-7M20 20V8"/></svg>',
   slip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>',
   bets: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 15l2.5 2.5L16 13"/></svg>',
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>',
   admin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-4-4L4 16v4z"/></svg>',
   sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
   moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
@@ -1299,11 +1300,66 @@ function betCard(b) {
       const note = x.other ? `Se sigue en ${LIGA_N[legLiga(l)]}: cámbialo arriba` : x.txt;
       return `<div class="bleg ${c}"><div class="bl-t"><span class="dot"></span><span class="lbl">${mixed ? `<span class="lg">${LIGA_N[legLiga(l)]}</span>` : ''}${esc(legLabel(l))}</span><b>${esc(now)}</b></div>${open ? '' : bar}${!open && note && l.type !== 'x' ? `<div class="xs mut">${esc(note)}</div>` : ''}</div>`; }).join('');
   return `<div class="bet ${st || 'open'}${open ? ' expanded' : ''}">
-    <div class="bet-h"><div><b>${b.legs.length > 1 ? `Combinada · ${b.legs.length}` : 'Simple'}</b><div class="xs mut">${eur(b.stake)} a ${dec(b.odd, 2)} · cobra ${eur(pay)}</div></div>${pill}${!b.result && !b.seed ? `<button class="x" data-delbet="${esc(b.id)}" aria-label="Borrar apuesta">×</button>` : ''}</div>
+    <div class="bet-h"><div><b>${b.legs.length > 1 ? `Combinada · ${b.legs.length}` : 'Simple'}</b><div class="xs mut">${eur(b.stake)} a ${dec(b.odd, 2)} · cobra ${eur(pay)}</div></div>${pill}<button class="x" data-share="${esc(b.id)}" aria-label="Compartir ticket" title="Compartir ticket">${ICON.share}</button>${!b.result && !b.seed ? `<button class="x" data-delbet="${esc(b.id)}" aria-label="Borrar apuesta">×</button>` : ''}</div>
     ${canOpen ? `<button class="bet-tg" data-tbet="${esc(b.id)}" aria-expanded="${open}">${legs}<span class="more">${open ? 'Ocultar el directo' : 'Ver marcador y jugadores en directo'}${ICON.chev}</span></button>` : `<div class="bet-legs">${legs}</div>`}
     ${open ? betLive(b, s) : ''}
   </div>`;
 }
+/* ---- compartir un ticket como imagen PNG ----
+   Se pinta la tarjeta desplegada (marcador, jugador, gráfico…) fuera de la pantalla con el logo de Tribuna y se
+   captura con html-to-image (se carga solo al compartir). NBA.com no deja exportar sus imágenes: en la captura,
+   escudos y fotos se cambian por los de ESPN, que sí deja (las fotos usan el id de ESPN que trae el directo). */
+const ESPN_NBA = { GSW: 'gs', NOP: 'no', NYK: 'ny', SAS: 'sa', UTA: 'utah', WAS: 'wsh' };
+let h2i = null;
+const loadH2I = () => h2i || (h2i = new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js'; sc.onload = () => ok(window.htmlToImage); sc.onerror = () => { h2i = null; ko(new Error('html-to-image')); }; document.head.appendChild(sc); }));
+function espnImages(root) {
+  const eids = {}; for (const lv of Object.values(LIVE)) for (const [pid, x] of Object.entries(lv.players || {})) if (x.eid) eids[pid] = x.eid;
+  root.querySelectorAll('img').forEach(im => {
+    im.removeAttribute('onerror');
+    if (/cdn\.nba\.com\/logos\//.test(im.src)) {
+      const t = im.parentNode.querySelector('img[alt]:not([alt=""])')?.alt || '';
+      im.src = `https://a.espncdn.com/i/teamlogos/nba/${im.classList.contains('lgL') ? '500' : '500-dark'}/${(ESPN_NBA[t] || t).toLowerCase()}.png`;
+    } else { const h = /cdn\.nba\.com\/headshots\/.*\/(\d+)\.png/.exec(im.src); if (h) { if (!eids[h[1]]) return im.remove(); im.src = `https://a.espncdn.com/i/headshots/nba/players/full/${eids[h[1]]}.png`; } }
+    im.loading = 'eager';
+  });
+}
+function ticketHtml(b) {
+  const had = OPENBETS.has(b.id); OPENBETS.add(b.id);
+  const card = betCard(b); if (!had) OPENBETS.delete(b.id);
+  const day = b.date ? new Date(b.date + 'T12:00:00Z').toLocaleDateString(LOC, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }) : '';
+  return `<div class="tk-png"><div class="tk-top"><div class="brand">Tribuna<i>.</i></div><span class="mut sm">${esc(day)}</span></div>${card}<p class="tk-legal">+18 · Juega solo lo que puedas permitirte perder.</p></div>`;
+}
+async function shareBet(b) {
+  // el directo de sus partidos (marcador, cuartos, jugadores) por si la tarjeta no estaba abierta
+  const ids = [...new Set(b.legs.filter(l => l.type !== 'x' && !otherLiga(l) && l.gameId).map(l => l.gameId))];
+  if (!DEMO) await Promise.all(ids.filter(id => !LIVE[id]).map(async id => { try { const box = await fetchLive(id); if (box) LIVE[id] = box; } catch (e) {} }));
+  const lib = await loadH2I();
+  const wrap = document.createElement('div'); wrap.className = 'tk-wrap'; wrap.innerHTML = ticketHtml(b);
+  wrap.querySelectorAll('.bet-h .x, .more, .boxtg, .bet-live > p').forEach(e => e.remove());
+  window.TRIBUNA_I18N?.walk(wrap); espnImages(wrap);
+  document.body.appendChild(wrap);
+  try {
+    await Promise.all([...wrap.querySelectorAll('img')].map(i => i.decode().catch(() => i.remove())));
+    const blob = await lib.toBlob(wrap.firstElementChild, { pixelRatio: 2, backgroundColor: getComputedStyle(document.body).backgroundColor });
+    if (blob) showShare(blob, b);
+  } finally { wrap.remove(); }
+}
+/* Vista previa con «Compartir» (menú del móvil) y «Descargar». El botón da un toque nuevo: el móvil exige uno para compartir. */
+function showShare(blob, b) {
+  const file = new File([blob], `tribuna-ticket-${b.date || 'hoy'}.png`, { type: 'image/png' }), url = URL.createObjectURL(blob);
+  const can = !!(navigator.canShare && navigator.canShare({ files: [file] }));
+  const m = document.createElement('div'); m.className = 'sharebox';
+  m.innerHTML = `<div class="card pad stack" role="dialog" aria-label="Compartir ticket"><img src="${url}" alt="Ticket"><div class="sh-btns">${can ? '<button class="btn" data-sh="share">Compartir</button>' : ''}<a class="btn ghost" href="${url}" download="${esc(file.name)}">Descargar</a><button class="btn ghost" data-sh="close">Cerrar</button></div></div>`;
+  window.TRIBUNA_I18N?.walk(m);
+  const close = () => { m.remove(); URL.revokeObjectURL(url); };
+  m.addEventListener('click', async e => {
+    const a = e.target.closest('[data-sh]');
+    if (e.target === m || a?.dataset.sh === 'close') return close();
+    if (a?.dataset.sh === 'share') { try { await navigator.share({ files: [file], title: 'Tribuna' }); } catch (err) {} }
+  });
+  document.body.appendChild(m);
+}
+
 /* ---- ficha desplegada de una apuesta: marcador de cada partido y lo que lleva cada jugador ---- */
 function gameLiveInfo(id, l) {
   const g = D.games.find(x => x.id === id), lv = LIVE[id];
@@ -1487,6 +1543,7 @@ app.addEventListener('click', async e => {
   if (d.range) { S.range = d.range; return render(); }
   if (d.calnav) { const [y, m] = S.calMonth.split('-').map(Number), n = new Date(Date.UTC(y, m - 1 + +d.calnav, 1)); S.calMonth = isoDay(n).slice(0, 7); S.calDay = null; return render(); }
   if (d.calday) { S.calDay = S.calDay === d.calday ? null : d.calday; return render(); }
+  if (d.share) { const bt = BETS.find(x => x.id === d.share); if (bt) { b.disabled = true; shareBet(bt).catch(err => { console.warn('Compartir', err); alert(window.TRIBUNA_I18N?.tr('No se pudo crear la imagen.') || 'No se pudo crear la imagen.'); }).finally(() => { b.disabled = false; }); } return; }
   if (d.tbet) { if (OPENBETS.has(d.tbet)) OPENBETS.delete(d.tbet); else { OPENBETS.add(d.tbet); if (!DEMO) pollLive(); } return render(); }
   if (d.tbox) { if (OPENBOX.has(d.tbox)) OPENBOX.delete(d.tbox); else OPENBOX.add(d.tbox); return render(); }
   if (d.delbet) { BETS = BETS.filter(b => b.id !== d.delbet); persistBets(null, d.delbet); return render(); }
