@@ -232,7 +232,7 @@ class Acumulador:
         self.d = defaultdict(lambda: {"over": [], "under": []})
 
     def add(self, entidad: str, stat: str, lado: str, punto, precio_dec) -> None:
-        if precio_dec and precio_dec > 1:
+        if precio_dec and precio_dec >= 1.02:   # 1,00-1,01 («no hace triple-doble») no es una cuota útil y descuadra el valor
             self.d[(entidad, stat)][lado].append((punto, precio_dec))
 
     def filas(self) -> dict[tuple[str, str], dict]:
