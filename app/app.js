@@ -1323,6 +1323,16 @@ function espnImages(root) {
     im.loading = 'eager';
   });
 }
+/* Cada escudo o foto se mete dentro de la imagen como datos (data:) antes de capturar, para no depender de que el
+   navegador la descargue a tiempo. Si no se puede, se quita (quedan las iniciales). */
+async function inlineImg(im) {
+  try {
+    const r = await fetch(im.src, { mode: 'cors' }); if (!r.ok) throw new Error(r.status);
+    const blob = await r.blob();
+    im.src = await new Promise((ok, ko) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = ko; fr.readAsDataURL(blob); });
+    await im.decode();
+  } catch (e) { im.parentNode?.classList.remove('ph'); im.remove(); }
+}
 function ticketHtml(b) {
   const had = OPENBETS.has(b.id); OPENBETS.add(b.id);
   const card = betCard(b); if (!had) OPENBETS.delete(b.id);
@@ -1339,8 +1349,11 @@ async function shareBet(b) {
   window.TRIBUNA_I18N?.walk(wrap); espnImages(wrap);
   document.body.appendChild(wrap);
   try {
-    await Promise.all([...wrap.querySelectorAll('img')].map(i => i.decode().catch(() => i.remove())));
-    const blob = await lib.toBlob(wrap.firstElementChild, { pixelRatio: 2, backgroundColor: getComputedStyle(document.body).backgroundColor });
+    await Promise.all([...wrap.querySelectorAll('img')].map(inlineImg));
+    // Safari (iPhone) pinta en blanco las imágenes en la primera captura: se captura dos veces y vale la segunda.
+    const opts = { pixelRatio: 2, backgroundColor: getComputedStyle(document.body).backgroundColor }, node = wrap.firstElementChild;
+    await lib.toBlob(node, opts);
+    const blob = await lib.toBlob(node, opts);
     if (blob) showShare(blob, b);
   } finally { wrap.remove(); }
 }
