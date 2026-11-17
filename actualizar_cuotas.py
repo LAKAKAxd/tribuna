@@ -1,4 +1,4 @@
-"""Tribuna · cuotas automáticas de tres APIs gratuitas, cada una con su papel.
+"""Tribuna · cuotas automáticas de tres APIs gratuitas, cada una con su papel (NBA, NFL y fútbol).
 
   1. PropLine (1.000 consultas al día)      -> fuente principal: ganador, hándicap, totales,
                                                puntos por equipo y todas las props de jugadores.
@@ -10,11 +10,15 @@
 Uso (en el PC del administrador, después de actualizar_nba.py / actualizar_nfl.py):
     py actualizar_cuotas.py              # 18:00
     py actualizar_cuotas.py --liga nfl   # cuotas de la jornada NFL (después de actualizar_nfl.py)
+    py actualizar_cuotas.py --liga futbol  # fútbol: solo partidos que empiezan en las próximas --horas (48)
     py actualizar_cuotas.py --props      # 21:00 (además permite gastar créditos de The Odds API en props)
     py actualizar_cuotas.py --prueba     # no sube nada; dice qué trae cada fuente y lo que queda de cada plan
     py actualizar_cuotas.py --solo sgo   # probar una sola fuente (propline | oddsapi | sgo)
 
 Las cuotas se guardan SIN nombre de casa: línea más repetida y cuota mediana del mercado.
+Solo se piden los partidos que empiezan en las próximas --horas (48 por defecto): los días sin partidos casi no gastan.
+Freno: PropLine para si le quedan menos de 100 consultas del día; The Odds API guarda reserva para el resto del mes.
+Fútbol: PropLine trae los ids de ESPN (equipos, partidos y jugadores); SportsGameOdds gratis solo tiene la Champions.
 Claves en config.env: PROPLINE_API_KEY, ODDS_API_KEY, SGO_API_KEY (las que falten se saltan).
 """
 from __future__ import annotations
@@ -72,7 +76,18 @@ STATS_NFL = {
 }
 PL_STAT = {pl: st for st, (pl, _) in STATS_APP.items()}
 SGO_STAT = {sg: st for st, (_, sg) in STATS_APP.items()}
-SI_NO = {"dd", "td"}   # mercados sí/no: línea 0,5, "más" = sí
+SI_NO = {"dd", "td", "gol", "ga", "asi", "tar"}   # mercados sí/no: línea 0,5, "más" = sí
+
+# Fútbol (PropLine). Partido: 's_x' = total del partido, 't_x' = de un equipo (como en la app).
+FUT_COMPS = {"ita.1": "soccer_serie_a", "esp.1": "soccer_la_liga", "eng.1": "soccer_epl", "uefa.champions": "soccer_uefa_champions_league"}
+FUT_PARTIDO = {"total_corners": "s_cor", "team_corners": "t_cor", "total_cards": "s_crd", "team_cards": "t_crd",
+               "total_fouls": "s_fc", "team_fouls": "t_fc", "total_offsides": "s_off", "team_offsides": "t_off",
+               "total_shots": "s_sh", "team_shots": "t_sh", "total_shots_on_target": "s_sot", "team_shots_on_target": "t_sot"}
+FUT_JUGADOR = {"anytime_goal_scorer": "gol", "goal_or_assist": "ga", "player_assists": "asi", "player_cards": "tar",
+               "player_shots": "sh", "player_shots_on_target": "sot", "player_fouls": "fc"}
+FUT_MERCADOS = ["h2h", "totals", "both_teams_to_score", *FUT_PARTIDO, *FUT_JUGADOR]
+# SportsGameOdds (Champions): statID de jugador -> estadística de la app
+SGO_FUT = {"points": "gol", "assists": "asi", "goals+assists": "ga", "shots": "sh", "shots_onGoal": "sot"}
 
 # Aplicaciones de fantasía (no son cuotas de verdad): fuera del consenso.
 DFS = {"prizepicks", "underdog", "sleeper", "betr", "dabble", "parlayplay", "chalkboard", "pick6",
@@ -83,6 +98,7 @@ ODDS_API = "https://api.the-odds-api.com/v4/sports/basketball_nba"
 ODDS_PROPS = ["player_points", "player_threes", "player_rebounds", "player_assists", "player_points_rebounds_assists"]
 COSTE_PARTIDOS = 3
 MINIMO_SEGURIDAD = 6
+RESERVA_PROPLINE = 100   # PropLine: si quedan menos consultas hoy, no se gasta más
 
 PROPLINE = "https://api.prop-line.com/v1/sports/basketball_nba"
 SGO = "https://api.sportsgameodds.com/v2"
@@ -102,8 +118,37 @@ EQUIPOS_NFL = {
 LIGA = {"nombre": "nba", "archivo": "nba.json", "prefijo": "", "sgo": "NBA", "creditos": "creditos_odds"}
 
 
-def usar_liga(liga: str) -> None:
+def clave_eq(nombre: str) -> str:
+    n = norm_nombre((nombre or "").translate(str.maketrans({"ø": "o", "Ø": "o", "æ": "ae", "ß": "ss", "ł": "l"})))
+    return re.sub(r"[^a-z0-9]+", " ", n).strip()
+
+
+class EquiposFut(dict):
+    """Nombre de equipo -> siglas, sin acentos ni mayúsculas y aceptando nombres más largos o más cortos."""
+
+    def get(self, nombre, defecto=None):
+        n = clave_eq(nombre)
+        if not n:
+            return defecto
+        if n in self:
+            return self[n]
+        cand = [c for k, c in self.items() if len(k) >= 4 and (k in n or n in k)]
+        return cand[0] if len(set(cand)) == 1 else defecto
+
+
+def usar_liga(liga: str, datos: dict | None = None) -> None:
     global STATS_APP, PL_STAT, SGO_STAT, EQUIPOS, ODDS_API, PROPLINE, ODDS_PROPS
+    if liga == "futbol":
+        LIGA.update(nombre="futbol", archivo="futbol.json", prefijo="fut:", sgo="UEFA_CHAMPIONS_LEAGUE", creditos="creditos_odds_fut")
+        STATS_APP, PL_STAT = {}, dict(FUT_JUGADOR)
+        SGO_STAT = dict(SGO_FUT)
+        meta = (datos or {}).get("teams_meta") or {}
+        EQUIPOS = EquiposFut()
+        for code, m in meta.items():
+            for nm in (m.get("name"), m.get("short")):
+                if nm:
+                    EQUIPOS.setdefault(clave_eq(nm), code)
+        return
     if liga != "nfl":
         return
     LIGA.update(nombre="nfl", archivo="nfl.json", prefijo="nfl:", sgo="NFL", creditos="creditos_odds_nfl")
@@ -112,7 +157,7 @@ def usar_liga(liga: str) -> None:
     SGO_STAT = {sg: st for st, (_, sg) in STATS_APP.items()}
     EQUIPOS = EQUIPOS_NFL
     ODDS_API = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl"
-    PROPLINE = "https://api.prop-line.com/v1/sports/americanfootball_nfl"
+    PROPLINE = "https://api.prop-line.com/v1/sports/football_nfl"   # PropLine la llama así (no americanfootball_nfl)
     ODDS_PROPS = ["player_pass_yds", "player_rush_yds", "player_reception_yds", "player_receptions", "player_anytime_td"]
 
 
@@ -265,7 +310,10 @@ class PropLine:
         self.consultas = 0
 
     def get(self, ruta: str, **params):
-        r = self.s.get(PROPLINE + ruta, params=params, headers={"X-API-Key": self.key}, timeout=60)
+        if self.restantes is not None and self.restantes < RESERVA_PROPLINE:
+            raise RuntimeError(f"PropLine: quedan {self.restantes} consultas hoy; se guardan de reserva.")
+        url = ruta if ruta.startswith("http") else PROPLINE + ruta
+        r = self.s.get(url, params=params, headers={"X-API-Key": self.key}, timeout=60)
         self.consultas += 1
         if r.headers.get("x-daily-remaining") is not None:
             self.restantes = int(float(r.headers["x-daily-remaining"]))
@@ -277,6 +325,8 @@ class PropLine:
         return r.json()
 
     def recoger(self, partidos: list[dict], jug: Jugadores) -> dict:
+        if LIGA["nombre"] == "futbol":
+            return self.recoger_fut(partidos, jug)
         eventos = self.get("/events")
         por_equipos = {}
         for ev in eventos:
@@ -292,6 +342,73 @@ class PropLine:
             datos = self.get(f"/events/{ev['id']}/odds", markets=mercados)
             self.leer(datos, g, acc, jug)
         return acc.filas()
+
+    def recoger_fut(self, partidos: list[dict], jug: Jugadores) -> dict:
+        """Fútbol: una lista de eventos por competición y una consulta por partido (los ids son los de ESPN)."""
+        acc = Acumulador()
+        for comp in sorted({g["comp"] for g in partidos if g.get("comp") in FUT_COMPS}):
+            base = "https://api.prop-line.com/v1/sports/" + FUT_COMPS[comp]
+            eventos = {str(ev.get("espn_event_id")): ev for ev in self.get(base + "/events")}
+            for g in partidos:
+                ev = eventos.get(str(g["id"])) if g.get("comp") == comp else None
+                if ev:
+                    self.leer_fut(self.get(f"{base}/events/{ev['id']}/odds", markets=",".join(FUT_MERCADOS)), g, acc, jug)
+        return acc.filas()
+
+    @staticmethod
+    def leer_fut(datos: dict, g: dict, acc: Acumulador, jug: Jugadores) -> None:
+        juego = f"G:{g['away']}@{g['home']}"
+        for bk in datos.get("bookmakers") or []:
+            if bk.get("key") in DFS:
+                continue
+            for mk in bk.get("markets") or []:
+                k, tipo = mk.get("key"), mk.get("line_type") or "main"
+                if mk.get("period") or mk.get("suspended_at") or tipo not in ("main", "milestone"):
+                    continue
+                for o in mk.get("outcomes") or []:
+                    if o.get("dfs_odds_type") or o.get("payout_multiplier"):
+                        continue
+                    precio, punto = a_decimal(o.get("price")), num(o.get("point"))
+                    nombre, desc = (o.get("name") or "").strip(), (o.get("description") or "").strip()
+                    lado = "over" if nombre.lower() in ("over", "yes") else "under" if nombre.lower() in ("under", "no") else None
+                    if k == "h2h":
+                        sd = o.get("side") or ("draw" if nombre.lower() in ("draw", "x", "tie") else None)
+                        if sd == "draw":
+                            acc.add(juego, "draw", "over", 0.5, precio)
+                        elif sd in ("home", "away"):
+                            acc.add(f"T:{g[sd]}", "ml", "over", None, precio)
+                    elif k == "totals" and lado:
+                        tm = EQUIPOS.get(mk.get("team")) if mk.get("team") else None
+                        if tm in (g["home"], g["away"]):
+                            acc.add(f"T:{tm}", "pts", lado, punto, precio)
+                        elif not mk.get("team"):
+                            acc.add(juego, "total", lado, punto, precio)
+                    elif k == "both_teams_to_score" and lado:
+                        acc.add(juego, "btts", lado, 0.5, precio)
+                    elif k in FUT_PARTIDO and lado:
+                        st = FUT_PARTIDO[k]
+                        if st.startswith("s_"):
+                            acc.add(juego, st, lado, punto, precio)
+                        else:
+                            tm = EQUIPOS.get(mk.get("team") or desc)
+                            if tm in (g["home"], g["away"]):
+                                acc.add(f"T:{tm}", st, lado, punto, precio)
+                    elif k in FUT_JUGADOR:
+                        st = FUT_JUGADOR[k]
+                        if tipo == "milestone":   # «1+ Shots on Target»: más de N-0,5
+                            m = re.match(r"(\d+)\+", nombre)
+                            if not m:
+                                continue
+                            lado, punto, quien = "over", int(m.group(1)) - 0.5, desc
+                        else:
+                            quien = desc if lado else nombre   # goal_or_assist trae el jugador en el nombre
+                            lado = lado or "over"
+                        if st in SI_NO and (punto or 0.5) != 0.5:
+                            continue   # 2+ goles, 2+ asistencias...: la app solo tiene «al menos uno»
+                        espn = str(o.get("player_id") or "").rsplit(":", 1)[-1] or None
+                        pid = jug.buscar(quien, espn)
+                        if pid:
+                            acc.add(pid, st, lado, 0.5 if st in SI_NO else punto, precio)
 
     @staticmethod
     def leer(datos: dict, g: dict, acc: Acumulador, jug: Jugadores) -> None:
@@ -455,10 +572,24 @@ class SportsGameOdds:
         juego = f"G:{g['away']}@{g['home']}"
         nombres = {pid: (p or {}).get("name") or "" for pid, p in (ev.get("players") or {}).items()}
         for o in (ev.get("odds") or {}).values():
-            if o.get("periodID") != "game" or not o.get("bookOddsAvailable", True) or o.get("started"):
+            # fútbol: los 90 minutos son "reg" (sin prórroga)
+            if o.get("periodID") not in ("game", "reg") or not o.get("bookOddsAvailable", True) or o.get("started"):
                 continue
             stat, ent, tipo, lado = o.get("statID"), o.get("statEntityID"), o.get("betTypeID"), o.get("sideID")
             precio = a_decimal(o.get("bookOdds"))
+            if LIGA["nombre"] == "futbol" and ent in ("home", "away", "all"):
+                if stat == "points" and tipo == "ml3way":
+                    if lado == "draw" or (ent == "all" and lado in ("draw", "tie")):
+                        acc.add(juego, "draw", "over", 0.5, precio)
+                    elif ent in ("home", "away") and lado == ent:
+                        acc.add(f"T:{g[ent]}", "ml", "over", None, precio)
+                elif stat == "points" and tipo == "ou" and lado in ("over", "under"):
+                    acc.add(juego if ent == "all" else f"T:{g[ent]}", "total" if ent == "all" else "pts", lado, num(o.get("bookOverUnder")), precio)
+                elif stat == "bothTeamsScored" and tipo == "yn" and lado in ("yes", "no"):
+                    acc.add(juego, "btts", "over" if lado == "yes" else "under", 0.5, precio)
+                elif stat == "cornerKicks" and tipo == "ou" and lado in ("over", "under"):
+                    acc.add(juego if ent == "all" else f"T:{g[ent]}", "s_cor" if ent == "all" else "t_cor", lado, num(o.get("bookOverUnder")), precio)
+                continue
             if ent in ("home", "away", "all") and stat == "points":
                 tm = g["home"] if ent == "home" else g["away"]
                 if tipo == "ml" and ent != "all":
@@ -470,6 +601,8 @@ class SportsGameOdds:
                             num(o.get("bookOverUnder")), precio)
             elif o.get("playerID") and stat in SGO_STAT:
                 st = SGO_STAT[stat]
+                if st in SI_NO and tipo != "yn":
+                    continue
                 lado = {"over": "over", "under": "under", "yes": "over", "no": "under"}.get(lado)
                 pid = jug.buscar(nombres.get(o["playerID"]) or "")
                 if pid and lado:
@@ -525,6 +658,28 @@ def ventana_utc(fecha: str) -> tuple[datetime, datetime]:
     return d + timedelta(hours=15), d + timedelta(hours=36)
 
 
+def proximos(partidos: list[dict], horas: float) -> list[dict]:
+    """Partidos que aún no han empezado y empiezan en las próximas `horas` (los que no traen hora, todos)."""
+    ahora = datetime.now(timezone.utc)
+    out = []
+    for g in partidos:
+        ini = g.get("start")
+        m = re.match(r"(\d+):(\d+)\s*([ap])m", (g.get("status") or "").lower())
+        if not ini and m and g.get("date"):   # NFL: «8:15 pm ET»; shortcut: ET = UTC-5 (en septiembre-octubre es -4, una hora de margen)
+            h = int(m.group(1)) % 12 + (12 if m.group(3) == "p" else 0)
+            ini = f"{g['date']}T{h:02d}:{m.group(2)}:00-05:00"
+        try:
+            t = datetime.fromisoformat(str(ini).replace("Z", "+00:00"))
+        except ValueError:
+            out.append(g)
+            continue
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        if ahora < t <= ahora + timedelta(hours=horas):
+            out.append(g)
+    return out
+
+
 def resumen(filas: dict) -> str:
     partido = sum(1 for (e, _) in filas if e.startswith(("T:", "G:")))
     return f"{partido} de partido + {len(filas) - partido} de jugadores"
@@ -535,23 +690,30 @@ def main() -> None:
     ap.add_argument("--props", action="store_true", help="permitir gastar créditos de The Odds API en props que falten")
     ap.add_argument("--prueba", action="store_true", help="no sube nada a Supabase")
     ap.add_argument("--solo", choices=["propline", "oddsapi", "sgo"], help="usar una sola fuente (para probar)")
-    ap.add_argument("--liga", choices=["nba", "nfl"], default="nba")
+    ap.add_argument("--liga", choices=["nba", "nfl", "futbol"], default="nba")
+    ap.add_argument("--horas", type=float, default=48, help="solo partidos que empiezan en las próximas N horas (NFL y fútbol)")
     args = ap.parse_args()
 
     cargar_config()
-    usar_liga(args.liga)
-    ruta_nba = os.path.join(CARPETA, LIGA["archivo"])
+    archivo = {"nfl": "nfl.json", "futbol": "futbol.json"}.get(args.liga, "nba.json")
+    ruta_nba = os.path.join(CARPETA, archivo)
     if not os.path.exists(ruta_nba):
-        sys.exit(f"Falta {LIGA['archivo']}: ejecuta antes actualizar_{args.liga}.py.")
+        sys.exit(f"Falta {archivo}: ejecuta antes actualizar_{args.liga}.py.")
     with open(ruta_nba, encoding="utf-8") as fh:
         nba = json.load(fh)
-    partidos = nba.get("games") or []
-    from bajas import actualizar as actualizar_bajas
-    actualizar_bajas(nba, subir_a_supabase=not args.prueba, liga=args.liga)
-    if not partidos:
+    usar_liga(args.liga, nba)
+    todos = nba.get("games") or []
+    if args.liga != "futbol":
+        from bajas import actualizar as actualizar_bajas
+        actualizar_bajas(nba, subir_a_supabase=not args.prueba, liga=args.liga)
+    if not todos:
         print("Hoy no hay partidos: no se consulta ninguna API.")
         return
-    fecha = partidos[0]["date"]   # NFL: toda la jornada se guarda con la fecha de su primer partido
+    fecha = todos[0]["date"]   # NFL y fútbol: todo se guarda con la fecha del primer partido (la que lee la app)
+    partidos = proximos(todos, args.horas) if args.liga != "nba" else todos
+    if not partidos:
+        print(f"Ningún partido empieza en las próximas {args.horas:g} horas: no se consulta ninguna API.")
+        return
     jug = Jugadores(nba, {t for g in partidos for t in (g["home"], g["away"])})
     usar = (lambda f: args.solo in (None, f))
     claves = {"propline": os.environ.get("PROPLINE_API_KEY"), "oddsapi": os.environ.get("ODDS_API_KEY"),
@@ -578,9 +740,9 @@ def main() -> None:
         except Exception as e:
             print(f"PropLine falló: {e}")
 
-    # 2. The Odds API: huecos de partido (y props con --props)
+    # 2. The Odds API: huecos de partido (y props con --props). En fútbol no compensa (500 créditos al mes).
     sin_partido, sin_props = huecos(filas, partidos, jug)
-    if usar("oddsapi") and claves["oddsapi"]:
+    if usar("oddsapi") and claves["oddsapi"] and args.liga != "futbol":
         oa = OddsAPI(claves["oddsapi"])
         try:
             nuevas = oa.recoger(sin_partido, sin_props, jug, args.props or args.solo == "oddsapi")
@@ -594,10 +756,14 @@ def main() -> None:
     # 3. SportsGameOdds: lo que siga faltando
     sin_partido, sin_props = huecos(filas, partidos, jug)
     faltan = [g for g in partidos if g in sin_partido or g in sin_props]
+    if args.liga == "futbol":
+        faltan = [g for g in faltan if g.get("comp") == "uefa.champions"]   # el plan gratis solo tiene la Champions
     if usar("sgo") and claves["sgo"] and faltan:
         sg = SportsGameOdds(claves["sgo"])
         try:
-            nuevas = sg.recoger(faltan, jug, ventana_utc(fecha)[0], ventana_utc(partidos[-1]["date"])[1])
+            ini, fin = (datetime.now(timezone.utc), datetime.now(timezone.utc) + timedelta(hours=args.horas)) if args.liga == "futbol" \
+                else (ventana_utc(fecha)[0], ventana_utc(partidos[-1]["date"])[1])
+            nuevas = sg.recoger(faltan, jug, ini, fin)
             juntar(nuevas, "sgo")
             print(f"SportsGameOdds: {resumen(nuevas)} nuevas · {sg.objetos} eventos gastados")
         except Exception as e:
