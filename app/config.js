@@ -8,8 +8,9 @@ window.TRIBUNA_CONFIG = {
   /* Escudos: true = logos oficiales de la NBA (solo para uso privado: tienen derechos de marca).
      ANTES DE PUBLICAR LA APP: ponlo en false y se usan escudos propios con los colores de cada equipo. */
   logosOficiales: true,
-  /* true = fotos oficiales de los jugadores (NBA.com). Solo uso privado. false = iniciales con los colores del equipo. */
-  fotosOficiales: false,
+  /* Fotos de los jugadores: true = fotos oficiales de NBA.com (solo uso privado).
+     ANTES DE PUBLICAR LA APP: ponlo en false y se muestran las iniciales con los colores del equipo. */
+  fotosOficiales: true,
 
   /* Fondos animados de jugador (opcional). id del jugador en NBA.com -> enlace https a un GIF, WEBP o MP4.
      También se pueden poner desde la propia ficha del jugador (solo el administrador).
