@@ -1,0 +1,223 @@
+/* Tribuna · idiomas. La app se escribe en español; si el usuario elige italiano o inglés,
+   cada texto que se pinta dentro de #app se traduce aquí: textos fijos en T y textos con
+   números o nombres en R. Para un texto nuevo: añade una fila [español, italiano, inglés].
+   Las fechas y los números ya salen en el idioma elegido (app.js usa LOC). */
+window.TRIBUNA_I18N = (function () {
+  const lang = window.TRIBUNA_LANG;
+  const col = { it: 1, en: 2 }[lang];
+  const T = [
+    // navegación y cabecera
+    ['Hoy', 'Oggi', 'Today'], ['Props', 'Props', 'Props'], ['Boleto', 'Schedina', 'Slip'], ['Apuestas', 'Scommesse', 'Bets'], ['Cuotas', 'Quote', 'Odds'],
+    ['Volver', 'Indietro', 'Back'], ['Liga', 'Lega', 'League'], ['Al día', 'Aggiornati', 'Up to date'], ['Sin actualizar', 'Non aggiornati', 'Out of date'],
+    ['Modo claro', 'Modalità chiara', 'Light mode'], ['Modo oscuro', 'Modalità scura', 'Dark mode'], ['Modo automático', 'Modalità automatica', 'Automatic mode'],
+    ['Configuración', 'Impostazioni', 'Settings'], ['Cargando…', 'Caricamento…', 'Loading…'], ['Cargando partidos…', 'Caricamento partite…', 'Loading games…'],
+    ['Estimaciones a partir de partidos pasados; no garantizan nada. +18 · Juega solo lo que puedas permitirte perder.', 'Stime basate sulle partite passate; non garantiscono nulla. +18 · Gioca solo ciò che puoi permetterti di perdere.', 'Estimates based on past games; nothing is guaranteed. 18+ · Only bet what you can afford to lose.'],
+    ['Modo demostración: estadísticas y cuotas simuladas.', 'Modalità demo: statistiche e quote simulate.', 'Demo mode: simulated stats and odds.'],
+    // configuración
+    ['Cuenta', 'Account', 'Account'], ['Modo demostración', 'Modalità demo', 'Demo mode'], ['Administrador', 'Amministratore', 'Administrator'],
+    ['Idioma', 'Lingua', 'Language'], ['Moneda', 'Valuta', 'Currency'], ['Contraseña', 'Password', 'Password'], ['Cerrar sesión', 'Esci', 'Log out'],
+    ['Las cantidades de tus apuestas, ganancias y calendario se muestran en esta moneda (no se convierten).', 'Gli importi delle tue scommesse, le vincite e il calendario sono mostrati in questa valuta (non vengono convertiti).', 'Your bet amounts, winnings and calendar are shown in this currency (nothing is converted).'],
+    ['Nueva contraseña (mín. 6)', 'Nuova password (min. 6)', 'New password (min. 6)'], ['Nueva contraseña', 'Nuova password', 'New password'], ['Guardar', 'Salva', 'Save'],
+    ['Contraseña cambiada.', 'Password cambiata.', 'Password changed.'],
+    ['Euro', 'Euro', 'Euro'], ['Dólar estadounidense', 'Dollaro statunitense', 'US dollar'], ['Libra esterlina', 'Sterlina britannica', 'Pound sterling'], ['Franco suizo', 'Franco svizzero', 'Swiss franc'],
+    ['Peso mexicano', 'Peso messicano', 'Mexican peso'], ['Peso argentino', 'Peso argentino', 'Argentine peso'], ['Peso colombiano', 'Peso colombiano', 'Colombian peso'], ['Peso chileno', 'Peso cileno', 'Chilean peso'], ['Sol peruano', 'Sol peruviano', 'Peruvian sol'],
+    // hoy
+    ['Esta noche', 'Stanotte', 'Tonight'], ['Esta semana', 'Questa settimana', 'This week'], ['Calendario', 'Calendario', 'Calendar'], ['Día', 'Giorno', 'Day'],
+    ['partido', 'partita', 'game'], ['partidos', 'partite', 'games'], ['primer salto', 'prima palla a due', 'first tip-off'], ['primer kickoff', 'primo kickoff', 'first kickoff'],
+    ['apuesta con valor', 'scommessa di valore', 'value bet'], ['apuestas con valor', 'scommesse di valore', 'value bets'], ['cuotas y props: el mismo día', 'quote e props: lo stesso giorno', 'odds and props: on the day'],
+    ['No hay partidos hoy', 'Nessuna partita oggi', 'No games today'], ['Vuelve mañana.', 'Torna domani.', 'Come back tomorrow.'], ['No hay partidos este día', 'Nessuna partita in questo giorno', 'No games on this day'],
+    ['No hay partidos esta semana', 'Nessuna partita questa settimana', 'No games this week'], ['La temporada está parada o aún no hay calendario.', 'La stagione è ferma o il calendario non è ancora disponibile.', 'The season is paused or there is no schedule yet.'],
+    ['No se pudo cargar el calendario', 'Impossibile caricare il calendario', 'Could not load the schedule'], ['Vuelve a intentarlo en un momento.', 'Riprova tra un momento.', 'Try again in a moment.'],
+    ['Las cuotas y las props se cargan cada día a las 18:00 y a las 21:00 para los partidos de esa noche. El modelo de los próximos días usa las bajas de hoy.', 'Quote e props si caricano ogni giorno alle 18:00 e alle 21:00 per le partite di quella notte. Il modello dei prossimi giorni usa gli infortuni di oggi.', 'Odds and props load every day at 18:00 and 21:00 for that night\'s games. The model for upcoming days uses today\'s injuries.'],
+    ['EN VIVO', 'IN DIRETTA', 'LIVE'], ['FINAL', 'FINALE', 'FINAL'], ['Final', 'Finale', 'Final'], ['Descanso', 'Intervallo', 'Halftime'], ['vs', 'vs', 'vs'],
+    // partido
+    ['Partido', 'Partita', 'Game'], ['Apartado', 'Sezione', 'Section'], ['Ganador', 'Vincente', 'Moneyline'], ['Hándicap', 'Handicap', 'Spread'], ['Total del partido', 'Totale partita', 'Game total'],
+    ['Puntos del equipo', 'Punti squadra', 'Team points'], ['La que más conviene', 'La più conveniente', 'Best pick'], ['Favorito del modelo', 'Favorito del modello', 'Model favourite'],
+    ['Modelo', 'Modello', 'Model'], ['+ Combinada', '+ Multipla', '+ Parlay'], ['Tramo', 'Periodo', 'Range'], ['Lugar', 'Luogo', 'Venue'], ['Todos', 'Tutte', 'All'], ['Casa', 'Casa', 'Home'], ['Fuera', 'Trasferta', 'Away'],
+    ['Diferencia de puntos', 'Differenza punti', 'Point differential'], ['Bajas', 'Assenze', 'Injuries'], ['Sin bajas', 'Nessuna assenza', 'No injuries'], ['sin efecto', 'nessun effetto', 'no effect'],
+    ['Sin parte de lesiones cargado', 'Nessun bollettino infortuni caricato', 'No injury report loaded'],
+    ['El modelo ya descuenta estas bajas (las dudas cuentan a medias). Lo que pierde cada equipo sale de lo que aporta el jugador frente a un suplente.', 'Il modello sconta già queste assenze (i dubbi contano a metà). Quanto perde ogni squadra dipende da quanto rende il giocatore rispetto a una riserva.', 'The model already accounts for these injuries (questionable players count half). What each team loses comes from the player\'s value over a backup.'],
+    ['El modelo solo descuenta la baja del quarterback titular (unos 3,5 puntos; las dudas cuentan a medias). El resto de bajas sale como aviso.', 'Il modello sconta solo l\'assenza del quarterback titolare (circa 3,5 punti; i dubbi contano a metà). Le altre assenze sono solo un avviso.', 'The model only accounts for a missing starting quarterback (about 3.5 points; questionable counts half). Other injuries are shown as a warning.'],
+    ['Baja', 'Assente', 'Out'], ['Duda seria', 'In forte dubbio', 'Doubtful'], ['Duda', 'In dubbio', 'Questionable'], ['Probable', 'Probabile', 'Probable'],
+    ['Ejemplo de la demo: baja por lesión en el tobillo.', 'Esempio della demo: fuori per un infortunio alla caviglia.', 'Demo example: out with an ankle injury.'], ['Ejemplo de la demo: en duda.', 'Esempio della demo: in dubbio.', 'Demo example: questionable.'],
+    ['Detalles que pueden cambiarlo todo', 'Dettagli che possono cambiare tutto', 'Details that can change everything'], ['Juega back-to-back (ayer también jugó)', 'Gioca back-to-back (ha giocato anche ieri)', 'Back-to-back (also played yesterday)'],
+    ['Otros mercados', 'Altri mercati', 'Other markets'], ['Más', 'Più', 'Over'], ['Menos', 'Meno', 'Under'], ['Más de', 'Più di', 'Over'], ['Menos de', 'Meno di', 'Under'],
+    ['Bajar línea', 'Abbassa linea', 'Lower line'], ['Subir línea', 'Alza linea', 'Raise line'], ['Línea', 'Linea', 'Line'], ['Cuota', 'Quota', 'Odds'], ['Lado', 'Lato', 'Side'],
+    ['Usar la cuota de hoy', 'Usa la quota di oggi', 'Use today\'s odds'], ['Línea de hoy', 'Linea di oggi', 'Today\'s line'], ['Escribe una cuota para ver el valor', 'Scrivi una quota per vedere il valore', 'Enter odds to see the value'],
+    [', el modelo', ', il modello', ', the model'], ['· Histórico L10', '· Storico L10', '· History L10'],
+    ['Mercado', 'Mercato', 'Market'], ['Estadística', 'Statistica', 'Stat'], ['Ordenar por', 'Ordina per', 'Sort by'],
+    // jugador
+    ['Media', 'Media', 'Average'], ['Mediana', 'Mediana', 'Median'], ['Máx.', 'Max', 'Max'], ['Triples', 'Triple', 'Threes'], ['Acierto', 'Precisione', 'Accuracy'],
+    ['Fecha', 'Data', 'Date'], ['Rival', 'Avversario', 'Opponent'], ['Partidos del tramo', 'Partite del periodo', 'Games in range'], ['Sin partidos con estos filtros.', 'Nessuna partita con questi filtri.', 'No games with these filters.'],
+    ['Mín. minutos', 'Min. minuti', 'Min. minutes'], ['0 días (back-to-back)', '0 giorni (back-to-back)', '0 days (back-to-back)'], ['1 día', '1 giorno', '1 day'], ['2 días o más', '2 giorni o più', '2+ days'],
+    ['Nota del duelo: % de L10 y defensa del rival', 'Voto della sfida: % di L10 e difesa avversaria', 'Matchup grade: L10 % and opponent defense'], ['Fondo animado', 'Sfondo animato', 'Animated background'],
+    ['Enlace a un GIF o MP4', 'Link a una GIF o MP4', 'Link to a GIF or MP4'], ['Enlace del fondo', 'Link dello sfondo', 'Background link'], ['Vacío = animación propia según su especialidad.', 'Vuoto = animazione propria in base alla specialità.', 'Empty = built-in animation based on their specialty.'],
+    ['Sin cuota cargada hoy: línea = mediana de L20', 'Nessuna quota caricata oggi: linea = mediana di L20', 'No odds loaded today: line = L20 median'], ['Usar la línea de hoy', 'Usa la linea di oggi', 'Use today\'s line'],
+    ['No llegó', 'Non raggiunta', 'Missed'], ['No se quedó por debajo', 'Non è rimasto sotto', 'Did not stay under'], ['partidos de este tramo.', 'partite di questo periodo.', 'games in this range.'],
+    ['Base/escolta', 'Playmaker/guardia', 'Guard'], ['Alero', 'Ala', 'Forward'], ['Pívot', 'Centro', 'Center'], ['Quarterback', 'Quarterback', 'Quarterback'], ['Corredor', 'Running back', 'Running back'], ['Receptor', 'Ricevitore', 'Wide receiver'], ['Ala cerrada', 'Tight end', 'Tight end'],
+    ['bases y escoltas', 'playmaker e guardie', 'guards'], ['aleros', 'ali', 'forwards'], ['pívots', 'centri', 'centers'], ['quarterbacks', 'quarterback', 'quarterbacks'], ['corredores', 'running back', 'running backs'], ['receptores', 'ricevitori', 'wide receivers'], ['alas cerradas', 'tight end', 'tight ends'],
+    ['Tirador de triples', 'Tiratore da tre', 'Three-point shooter'], ['Director de juego', 'Regista', 'Playmaker'], ['Dominio de la pintura', 'Dominio del pitturato', 'Paint presence'], ['Anotador desde el bote', 'Realizzatore dal palleggio', 'Shot creator'],
+    ['Lanza el balón', 'Lancia la palla', 'Throws the ball'], ['Juego de carrera', 'Gioco di corsa', 'Running game'], ['Receptor abierto', 'Ricevitore aperto', 'Wide receiver'], ['Bloquea y recibe', 'Blocca e riceve', 'Blocks and catches'],
+    // estadísticas NBA
+    ['Puntos', 'Punti', 'Points'], ['Rebotes', 'Rimbalzi', 'Rebounds'], ['Asistencias', 'Assist', 'Assists'], ['Triples anotados', 'Triple segnate', '3-pointers made'], ['Triples intentados', 'Triple tentate', '3-pointers attempted'],
+    ['Puntos + rebotes + asistencias', 'Punti + rimbalzi + assist', 'Points + rebounds + assists'], ['Puntos + rebotes', 'Punti + rimbalzi', 'Points + rebounds'], ['Puntos + asistencias', 'Punti + assist', 'Points + assists'], ['Rebotes + asistencias', 'Rimbalzi + assist', 'Rebounds + assists'],
+    ['Tiros de campo anotados', 'Tiri dal campo segnati', 'Field goals made'], ['Tiros de campo intentados', 'Tiri dal campo tentati', 'Field goals attempted'], ['Tiros libres anotados', 'Tiri liberi segnati', 'Free throws made'], ['Tiros libres intentados', 'Tiri liberi tentati', 'Free throws attempted'],
+    ['Robos', 'Palle rubate', 'Steals'], ['Tapones', 'Stoppate', 'Blocks'], ['Robos + tapones', 'Rubate + stoppate', 'Steals + blocks'], ['Robos+tapones', 'Rubate+stoppate', 'Steals+blocks'], ['Pérdidas', 'Palle perse', 'Turnovers'],
+    ['Doble-doble', 'Doppia doppia', 'Double-double'], ['Triple-doble', 'Tripla doppia', 'Triple-double'], ['Dobles-dobles', 'Doppie doppie', 'Double-doubles'], ['Triples-dobles', 'Triple doppie', 'Triple-doubles'], ['Minutos', 'Minuti', 'Minutes'],
+    ['Intentos de triple', 'Tentativi da tre', '3PT attempts'], ['Tiros de campo', 'Tiri dal campo', 'Field goals'], ['Intentos de campo', 'Tentativi dal campo', 'FG attempts'], ['Tiros libres', 'Tiri liberi', 'Free throws'], ['Intentos de libre', 'Tentativi di libero', 'FT attempts'],
+    ['PÉR', 'PP', 'TOV'], ['ROB', 'RUB', 'STL'], ['TAP', 'STP', 'BLK'], ['ROB+TAP', 'RUB+STP', 'STL+BLK'], ['TCI', 'TCT', 'FGA'], ['TLI', 'TLT', 'FTA'],
+    // estadísticas NFL
+    ['Yardas de pase', 'Yard su passaggio', 'Passing yards'], ['Pases de touchdown', 'Passaggi da touchdown', 'Passing touchdowns'], ['Pases completados', 'Passaggi completati', 'Completions'], ['Pases intentados', 'Passaggi tentati', 'Pass attempts'],
+    ['Intercepciones lanzadas', 'Intercetti subiti', 'Interceptions thrown'], ['Yardas de pase + carrera', 'Yard su passaggio + corsa', 'Passing + rushing yards'], ['Yardas de carrera', 'Yard su corsa', 'Rushing yards'], ['Carreras', 'Corse', 'Rushing attempts'],
+    ['Recepciones', 'Ricezioni', 'Receptions'], ['Yardas de recepción', 'Yard su ricezione', 'Receiving yards'], ['Yardas de carrera + recepción', 'Yard su corsa + ricezione', 'Rushing + receiving yards'], ['Balones dirigidos (targets)', 'Palloni indirizzati (target)', 'Targets'],
+    ['Anota touchdown', 'Segna un touchdown', 'Anytime touchdown'], ['TD de pase', 'TD su passaggio', 'Passing TDs'], ['Completados', 'Completati', 'Completions'], ['Intentos de pase', 'Tentativi di passaggio', 'Pass attempts'], ['Intercepciones', 'Intercetti', 'Interceptions'],
+    ['Pase + carrera', 'Passaggio + corsa', 'Pass + rush'], ['Carrera + recepción', 'Corsa + ricezione', 'Rush + rec'], ['Targets', 'Target', 'Targets'], ['Touchdown', 'Touchdown', 'Touchdown'],
+    ['YD PASE', 'YD PASS', 'PASS YDS'], ['TD PASE', 'TD PASS', 'PASS TD'], ['INT. PASE', 'TENT. PASS', 'PASS ATT'], ['INTERC.', 'INTERC.', 'INT'], ['PASE+CARR', 'PASS+CORSA', 'PASS+RUSH'], ['YD CARR', 'YD CORSA', 'RUSH YDS'], ['CARR', 'CORSE', 'CAR'],
+    ['YD REC', 'YD RIC', 'REC YDS'], ['CARR+REC', 'CORSA+RIC', 'RUSH+REC'], ['PASE', 'PASS', 'PASS'], ['YD P', 'YD P', 'P YDS'], ['TD P', 'TD P', 'P TD'], ['YD C', 'YD C', 'R YDS'], ['YD R', 'YD R', 'REC YDS'],
+    // props
+    ['Props de esta noche', 'Props di stanotte', 'Tonight\'s props'], ['Props de la semana', 'Props della settimana', 'This week\'s props'], ['Ordenadas por valor frente a las cuotas cargadas hoy', 'Ordinate per valore rispetto alle quote di oggi', 'Sorted by value against today\'s odds'],
+    ['Tipo', 'Tipo', 'Type'], ['Jugadores', 'Giocatori', 'Players'], ['Partidos', 'Partite', 'Games'], ['Todas', 'Tutte', 'All'], ['Valor frente al modelo', 'Valore rispetto al modello', 'Value against the model'],
+    ['Aún no hay cuotas cargadas hoy', 'Ancora nessuna quota caricata oggi', 'No odds loaded yet today'], ['Cárgalas en la pestaña Cuotas.', 'Caricale nella scheda Quote.', 'Load them in the Odds tab.'],
+    ['El administrador las cargará antes de los partidos.', 'L\'amministratore le caricherà prima delle partite.', 'The administrator will load them before the games.'], ['Valor', 'Valore', 'Value'],
+    // boleto
+    ['Tu boleto está vacío', 'La tua schedina è vuota', 'Your slip is empty'], ['Abre un jugador o un partido y pulsa «+ Combinada». Con una sola selección es una apuesta simple.', 'Apri un giocatore o una partita e premi «+ Multipla». Con una sola selezione è una singola.', 'Open a player or a game and tap “+ Parlay”. With one selection it is a single bet.'],
+    ['1 selección · apuesta simple', '1 selezione · singola', '1 selection · single bet'], ['Probabilidad estimada', 'Probabilità stimata', 'Estimated probability'], ['Cuota justa', 'Quota equa', 'Fair odds'], ['Cuota combinada', 'Quota combinata', 'Combined odds'],
+    ['Falta alguna cuota', 'Manca qualche quota', 'Some odds are missing'], ['Multiplica las probabilidades como si fueran independientes.', 'Moltiplica le probabilità come se fossero indipendenti.', 'Multiplies the probabilities as if they were independent.'],
+    ['Multiplica las probabilidades como si fueran independientes. Hay selecciones del mismo partido: en la realidad suelen estar relacionadas y el resultado puede ser distinto.', 'Moltiplica le probabilità come se fossero indipendenti. Ci sono selezioni della stessa partita: in realtà di solito sono collegate e il risultato può essere diverso.', 'Multiplies the probabilities as if they were independent. Some selections are from the same game: in reality they are usually related and the result may differ.'],
+    ['¿La has jugado? Regístrala', 'L\'hai giocata? Registrala', 'Did you place it? Log it'], ['Cuota que te dieron', 'Quota ottenuta', 'Odds you got'], ['Cobras', 'Incassi', 'Payout'], ['Registrar combinada', 'Registra multipla', 'Log parlay'], ['Registrar apuesta', 'Registra scommessa', 'Log bet'],
+    ['Se guarda en «Apuestas» y la sigues en directo durante el partido.', 'Si salva in «Scommesse» e la segui in diretta durante la partita.', 'It is saved in “Bets” and you can follow it live during the game.'], ['Vaciar boleto', 'Svuota schedina', 'Clear slip'], ['Quitar', 'Rimuovi', 'Remove'],
+    // apuestas
+    ['Mis apuestas', 'Le mie scommesse', 'My bets'], ['Solo las ves tú.', 'Le vedi solo tu.', 'Only you can see them.'], ['Periodo', 'Periodo', 'Period'], ['Semana', 'Settimana', 'Week'], ['Mes', 'Mese', 'Month'], ['3 meses', '3 mesi', '3 months'], ['6 meses', '6 mesi', '6 months'], ['Año', 'Anno', 'Year'],
+    ['beneficio', 'profitto', 'profit'], ['Beneficio acumulado', 'Profitto cumulato', 'Cumulative profit'], ['Sin apuestas cerradas en este periodo.', 'Nessuna scommessa chiusa in questo periodo.', 'No settled bets in this period.'],
+    ['Barras: ganancia o pérdida de cada apuesta. Línea ámbar: acumulado.', 'Barre: vincita o perdita di ogni scommessa. Linea ambra: cumulato.', 'Bars: profit or loss per bet. Amber line: cumulative.'],
+    ['Barras: ganancia o pérdida de cada día. Línea ámbar: acumulado.', 'Barre: vincita o perdita di ogni giorno. Linea ambra: cumulato.', 'Bars: profit or loss per day. Amber line: cumulative.'],
+    ['Barras: ganancia o pérdida de cada semana. Línea ámbar: acumulado.', 'Barre: vincita o perdita di ogni settimana. Linea ambra: cumulato.', 'Bars: profit or loss per week. Amber line: cumulative.'],
+    ['Barras: ganancia o pérdida de cada mes. Línea ámbar: acumulado.', 'Barre: vincita o perdita di ogni mese. Linea ambra: cumulato.', 'Bars: profit or loss per month. Amber line: cumulative.'],
+    ['Esta noche y pendientes', 'Stanotte e in sospeso', 'Tonight and pending'], ['Esta semana y pendientes', 'Questa settimana e in sospeso', 'This week and pending'], ['Simular el directo', 'Simula la diretta', 'Simulate live'], ['Simulando…', 'Simulazione…', 'Simulating…'],
+    ['No tienes apuestas para esta noche', 'Non hai scommesse per stanotte', 'You have no bets for tonight'], ['No tienes apuestas pendientes', 'Non hai scommesse in sospeso', 'You have no pending bets'],
+    ['Añade selecciones al boleto y regístralas con tu importe y cuota.', 'Aggiungi selezioni alla schedina e registrale con importo e quota.', 'Add selections to the slip and log them with your stake and odds.'],
+    ['El directo se actualiza cada 30 segundos con el marcador de ESPN mientras la app está abierta.', 'La diretta si aggiorna ogni 30 secondi con il punteggio di ESPN mentre l\'app è aperta.', 'Live updates every 30 seconds from the ESPN scoreboard while the app is open.'],
+    ['Se actualiza solo cada 30 segundos.', 'Si aggiorna da solo ogni 30 secondi.', 'Updates automatically every 30 seconds.'], ['Simple', 'Singola', 'Single'], ['Pendiente', 'In sospeso', 'Pending'], ['En juego', 'In corso', 'In play'], ['Nula', 'Annullata', 'Void'],
+    ['Ver marcador y jugadores en directo', 'Vedi punteggio e giocatori in diretta', 'See live score and players'], ['Ocultar el directo', 'Nascondi la diretta', 'Hide live'], ['Borrar apuesta', 'Elimina scommessa', 'Delete bet'],
+    ['Ver todos los jugadores del partido', 'Vedi tutti i giocatori della partita', 'See all players in the game'], ['Ocultar todos los jugadores del partido', 'Nascondi tutti i giocatori della partita', 'Hide all players in the game'],
+    ['Sin datos todavía.', 'Ancora nessun dato.', 'No data yet.'], ['Aún no ha empezado', 'Non è ancora iniziata', 'Not started yet'], ['Aún no ha jugado', 'Non ha ancora giocato', 'Has not played yet'], ['Cumplida', 'Vinta', 'Won'], ['Fallada', 'Persa', 'Lost'],
+    ['Ya la supera', 'L\'ha già superata', 'Already over'], ['en pista', 'in campo', 'on court'], ['Empate', 'Pareggio', 'Tie'], ['Sin apuestas ese día.', 'Nessuna scommessa quel giorno.', 'No bets that day.'], ['Mes anterior', 'Mese precedente', 'Previous month'], ['Mes siguiente', 'Mese successivo', 'Next month'],
+    ['Evolución durante el partido', 'Andamento durante la partita', 'Progress during the game'],
+    // cuotas (admin)
+    ['Cuotas de hoy', 'Quote di oggi', 'Today\'s odds'], ['Cuotas de la semana', 'Quote della settimana', 'This week\'s odds'], ['Cuotas automáticas', 'Quote automatiche', 'Automatic odds'], ['consultas hoy', 'richieste oggi', 'requests today'], ['créditos este mes', 'crediti questo mese', 'credits this month'], ['eventos usados', 'eventi usati', 'events used'],
+    ['Se actualizan solas a las 18:00 y a las 21:00 con tres fuentes gratis: PropLine primero, y The Odds API y SportsGameOdds para lo que falte. Las que pegues aquí tienen prioridad y el script no las toca.', 'Si aggiornano da sole alle 18:00 e alle 21:00 con tre fonti gratuite: prima PropLine, poi The Odds API e SportsGameOdds per ciò che manca. Quelle che incolli qui hanno la priorità e lo script non le tocca.', 'They update by themselves at 18:00 and 21:00 from three free sources: PropLine first, then The Odds API and SportsGameOdds for anything missing. Odds you paste here take priority and the script leaves them alone.'],
+    ['Pega una línea por apuesta', 'Incolla una riga per scommessa', 'Paste one line per bet'], ['Jugador:', 'Giocatore:', 'Player:'], ['. Partido:', '. Partita:', '. Game:'], ['nombre estadística línea cuota-más cuota-menos', 'nome statistica linea quota-più quota-meno', 'name stat line over-odds under-odds'],
+    ['EQUIPO ganador cuota', 'SQUADRA ganador quota', 'TEAM ganador odds'], ['EQUIPO handicap línea cuota', 'SQUADRA handicap linea quota', 'TEAM handicap line odds'], ['EQUIPO puntos línea más menos', 'SQUADRA puntos linea più meno', 'TEAM puntos line over under'], ['VIS@LOC total línea más menos', 'OSP@CASA total linea più meno', 'AWAY@HOME total line over under'],
+    ['. Las cuotas son opcionales salvo en ganador. Sirven comas o puntos, espacios, punto y coma o tabuladores.', '. Le quote sono facoltative tranne per ganador. Vanno bene virgole o punti, spazi, punto e virgola o tabulazioni.', '. Odds are optional except for ganador. Commas or dots, spaces, semicolons or tabs all work.'],
+    ['. Las cuotas son opcionales salvo en ganador. Sirven comas o puntos, espacios, punto y coma o tabuladores. Estadísticas NFL: pyd (yardas de pase), ptd, cmp, att, int, pry (pase + carrera), ryd (carrera), car, rec, reyd (recepción), rry (carrera + recepción), tgt y td (anota touchdown, línea 0,5).',
+      '. Le quote sono facoltative tranne per ganador. Vanno bene virgole o punti, spazi, punto e virgola o tabulazioni. Statistiche NFL: pyd (yard su passaggio), ptd, cmp, att, int, pry (passaggio + corsa), ryd (corsa), car, rec, reyd (ricezione), rry (corsa + ricezione), tgt e td (segna un touchdown, linea 0,5).',
+      '. Odds are optional except for ganador. Commas or dots, spaces, semicolons or tabs all work. NFL stats: pyd (passing yards), ptd, cmp, att, int, pry (pass + rush), ryd (rushing), car, rec, reyd (receiving), rry (rush + rec), tgt and td (anytime touchdown, line 0.5).'],
+    ['Ejemplo', 'Esempio', 'Example'], ['Borrar todas las de hoy', 'Elimina tutte quelle di oggi', 'Delete all of today\'s'], ['Guardando…', 'Salvataggio…', 'Saving…'], ['Texto', 'Testo', 'Text'], ['Se guarda como', 'Si salva come', 'Saved as'], ['Estado', 'Stato', 'Status'], ['Listo', 'Pronto', 'Ready'],
+    ['Código del grupo', 'Codice del gruppo', 'Group code'], ['Pásaselo a tus amigos junto con la dirección de la app. Con él crean su cuenta en «Crear cuenta». Si lo cambias, los que ya están dentro siguen dentro.', 'Passalo ai tuoi amici insieme all\'indirizzo dell\'app. Con questo creano il loro account in «Crea account». Se lo cambi, chi è già dentro resta dentro.', 'Share it with your friends together with the app address. They use it to sign up in “Create account”. If you change it, people already in stay in.'],
+    ['Código del grupo guardado.', 'Codice del gruppo salvato.', 'Group code saved.'], ['Cuotas de hoy borradas.', 'Quote di oggi eliminate.', 'Today\'s odds deleted.'], ['No juega hoy', 'Non gioca oggi', 'Not playing today'],
+    ['Jugador no encontrado', 'Giocatore non trovato', 'Player not found'], ['Estadística no reconocida', 'Statistica non riconosciuta', 'Stat not recognised'], ['Falta la línea', 'Manca la linea', 'Line missing'], ['Falta la cuota', 'Manca la quota', 'Odds missing'], ['Cuota no válida', 'Quota non valida', 'Invalid odds'],
+    ['Ese partido no se juega hoy', 'Quella partita non si gioca oggi', 'That game is not played today'], ['Falta el hándicap (p. ej. -4,5)', 'Manca l\'handicap (es. -4,5)', 'Spread missing (e.g. -4.5)'],
+    ['Mercado no reconocido: usa ganador, handicap, total o puntos', 'Mercato non riconosciuto: usa ganador, handicap, total o puntos', 'Market not recognised: use ganador, handicap, total or puntos'], ['Para ganador, hándicap o puntos indica el equipo (p. ej. OKC)', 'Per ganador, handicap o puntos indica la squadra (es. OKC)', 'For ganador, handicap or puntos give the team (e.g. OKC)'],
+    // entrar
+    ['Estadísticas NBA y NFL para el grupo.', 'Statistiche NBA e NFL per il gruppo.', 'NBA and NFL stats for the group.'], ['Acceso', 'Accesso', 'Access'], ['Entrar', 'Entra', 'Log in'], ['Crear cuenta', 'Crea account', 'Create account'], ['Correo', 'Email', 'Email'],
+    ['Contraseña (mínimo 6 caracteres)', 'Password (minimo 6 caratteri)', 'Password (at least 6 characters)'], ['Te lo da el administrador', 'Te lo dà l\'amministratore', 'The administrator gives it to you'], ['Crear mi cuenta', 'Crea il mio account', 'Create my account'], ['Entrando…', 'Accesso…', 'Logging in…'],
+    ['Necesitas el código que te ha pasado el administrador. Tus apuestas y tu boleto son privados: solo los ves tú. +18.', 'Ti serve il codice che ti ha dato l\'amministratore. Le tue scommesse e la tua schedina sono private: le vedi solo tu. +18.', 'You need the code the administrator gave you. Your bets and slip are private: only you can see them. 18+.'],
+    ['Tus apuestas y tu boleto son privados: solo los ves tú. +18.', 'Le tue scommesse e la tua schedina sono private: le vedi solo tu. +18.', 'Your bets and slip are private: only you can see them. 18+.'],
+    ['Entrar al grupo', 'Entra nel gruppo', 'Join the group'], ['Código', 'Codice', 'Code'], ['Has entrado como', 'Hai effettuato l\'accesso come', 'You are logged in as'], ['. Para ver las estadísticas escribe el código que te dio el administrador.', '. Per vedere le statistiche scrivi il codice che ti ha dato l\'amministratore.', '. To see the stats, enter the code the administrator gave you.'],
+    ['Correo o contraseña incorrectos.', 'Email o password errati.', 'Wrong email or password.'], ['Ese código no es correcto.', 'Questo codice non è corretto.', 'That code is not correct.'], ['Ese correo ya tiene cuenta: usa «Entrar».', 'Questa email ha già un account: usa «Entra».', 'That email already has an account: use “Log in”.'],
+    ['El registro está cerrado. Pide al administrador que te cree la cuenta.', 'La registrazione è chiusa. Chiedi all\'amministratore di crearti l\'account.', 'Sign-up is closed. Ask the administrator to create your account.'], ['Cuenta creada, pero falta confirmarla. Avisa al administrador.', 'Account creato, ma va confermato. Avvisa l\'amministratore.', 'Account created but it still needs confirming. Tell the administrator.'],
+    ['Algo ha fallado', 'Qualcosa è andato storto', 'Something went wrong'],
+  ];
+  /* Textos con números o nombres: [expresión sobre el texto en español, italiano, inglés].
+     Cada traducción es un texto con $1, $2… o una función (m = lo encontrado, w = traduce un trozo). */
+  const ov = (x, it, en) => x === 'más' || x === 'Más' ? [it ? 'più' : 'over', it ? 'Più' : 'Over'] : [it ? 'meno' : 'under', it ? 'Meno' : 'Under'];
+  const R = [
+    [/^(.+) · (más|menos) de ([\d.,]+) (.+)$/, (m, w) => `${m[1]} · ${ov(m[2], 1)[0]} di ${m[3]} ${w(m[4])}`, (m, w) => `${m[1]} · ${ov(m[2])[0]} ${m[3]} ${w(m[4])}`],
+    [/^(Más|Menos) de ([\d.,]+) se cumplió en$/, (m) => `${ov(m[1], 1)[1]} di ${m[2]}: si è verificato in`, (m) => `${ov(m[1])[1]} ${m[2]} hit in`],
+    [/^(Más|Menos) de ([\d.,]+)(?: (.+))?$/, (m, w) => `${ov(m[1], 1)[1]} di ${m[2]}${m[3] ? ' ' + w(m[3]) : ''}`, (m, w) => `${ov(m[1])[1]} ${m[2]}${m[3] ? ' ' + w(m[3]) : ''}`],
+    [/^Superó ([\d.,]+)$/, 'Superato $1', 'Over $1'], [/^Se quedó por debajo de ([\d.,]+)$/, 'Rimasto sotto $1', 'Stayed under $1'],
+    [/^([\d.,]+) (.+) · ([\d.,]+)$/, (m, w) => `${m[1]} ${w(m[2])} · ${m[3]}`, (m, w) => `${m[1]} ${w(m[2])} · ${m[3]}`],
+    [/^(\d+) de (\d+)$/, '$1 su $2', '$1 of $2'], [/^(\d+) (día|días) de descanso(?: · (\S+) (?:viene de back-to-back|(\d+) días?))?$/,
+      m => `${m[1]} ${m[1] === '1' ? 'giorno' : 'giorni'} di riposo${m[3] ? ` · ${m[3]} ${m[4] ? m[4] + (m[4] === '1' ? ' giorno' : ' giorni') : 'viene da un back-to-back'}` : ''}`,
+      m => `${m[1]} ${m[1] === '1' ? 'day' : 'days'} of rest${m[3] ? ` · ${m[3]} ${m[4] ? m[4] + (m[4] === '1' ? ' day' : ' days') : 'on a back-to-back'}` : ''}`],
+    [/^(\S+) es la (\d+)\.ª defensa contra (.+?) en (.+) \((\d+)\.ª = la que más concede\)\.$/, (m, w) => `${m[1]} è la ${m[2]}ª difesa contro i ${w(m[3])} in ${w(m[4])} (${m[5]}ª = quella che concede di più).`, (m, w) => `${m[1]} is the No. ${m[2]} defense against ${w(m[3])} in ${w(m[4])} (No. ${m[5]} = allows the most).`],
+    [/^Cada recuadro es el % de partidos en que se cumplió en ese tramo\. DvP: puesto de (\S+) contra su posición \((\d+)\.º = la defensa que más concede\)\. La línea es la cargada hoy o, si no hay, la mediana de sus últimos 20\.$/,
+      'Ogni riquadro è la % di partite in cui si è verificato in quel periodo. DvP: posizione di $1 contro il suo ruolo ($2º = la difesa che concede di più). La linea è quella caricata oggi o, se non c\'è, la mediana delle sue ultime 20.',
+      'Each box is the % of games where it hit in that range. DvP: rank of $1 against their position (No. $2 = the defense that allows the most). The line is today\'s line or, if none, the median of their last 20.'],
+    [/^Ordenado por (.+)$/, 'Ordinato per $1', 'Sorted by $1'], [/^Jugadores (\S+)$/, 'Giocatori $1', '$1 players'], [/^Historial de (\S+)$/, 'Storico di $1', '$1 history'],
+    [/^Gana (\S+)(.*)$/, 'Vince $1$2', '$1 to win$2'], [/^(\S+) @ (\S+) · (.+) · ([\d.,]+)$/, (m, w) => `${m[1]} @ ${m[2]} · ${w(m[3])} · ${m[4]}`, (m, w) => `${m[1]} @ ${m[2]} · ${w(m[3])} · ${m[4]}`],
+    [/^(\S+) @ (\S+) · total ([\d.,]+)$/, '$1 @ $2 · totale $3', '$1 @ $2 · total $3'], [/^Puntos (\S+) ([\d.,]+)$/, 'Punti $1 $2', '$1 points $2'],
+    [/^(\S+) (más|menos) de ([\d.,]+)$/, m => `${m[1]} ${ov(m[2], 1)[0]} di ${m[3]}`, m => `${m[1]} ${ov(m[2])[0]} ${m[3]}`],
+    [/^(Más|Menos) de ([\d.,]+) puntos$/, m => `${ov(m[1], 1)[1]} di ${m[2]} punti`, m => `${ov(m[1])[1]} ${m[2]} points`],
+    [/^(\S+) en sus últimos 10: (\d+)-(\d+), encaja (\d+) puntos$/, '$1 nelle ultime 10: $2-$3, subisce $4 punti', '$1 in their last 10: $2-$3, allows $4 points'],
+    [/^Contra (\S+) en las dos temporadas: (.+)$/, 'Contro $1 nelle due stagioni: $2', 'Against $1 over both seasons: $2'],
+    [/^Racha de (\d+) victorias seguidas$/, 'Serie di $1 vittorie consecutive', '$1-game winning streak'], [/^Racha de (\d+) derrotas seguidas$/, 'Serie di $1 sconfitte consecutive', '$1-game losing streak'],
+    [/^En casa esta temporada: (.+)$/, 'In casa questa stagione: $1', 'At home this season: $1'], [/^Fuera de casa esta temporada: (.+)$/, 'In trasferta questa stagione: $1', 'Away this season: $1'],
+    [/^Últimos 10: (\d+-\d+), (\S+) de diferencia media, (\d+) puntos a favor$/, 'Ultime 10: $1, $2 di differenza media, $3 punti segnati', 'Last 10: $1, $2 average margin, $3 points scored'],
+    [/^(\d+-\d+) en este tramo(?: · (\S+) de diferencia media)?$/, m => `${m[1]} in questo periodo${m[2] ? ` · ${m[2]} di differenza media` : ''}`, m => `${m[1]} in this range${m[2] ? ` · ${m[2]} average margin` : ''}`],
+    [/^(\d+-\d+) · (casa|fuera) (\d+-\d+)$/, m => `${m[1]} · ${m[2] === 'casa' ? 'casa' : 'trasferta'} ${m[3]}`, m => `${m[1]} · ${m[2] === 'casa' ? 'home' : 'away'} ${m[3]}`],
+    [/^Modelo: (\S+) (por|pierde por) ([\d.,]+) · (\d+-\d+)( · con bajas)?$/, m => `Modello: ${m[1]} ${m[2] === 'por' ? 'di' : 'perde di'} ${m[3]} · ${m[4]}${m[5] ? ' · con assenze' : ''}`, m => `Model: ${m[1]} ${m[2] === 'por' ? 'by' : 'loses by'} ${m[3]} · ${m[4]}${m[5] ? ' · with injuries' : ''}`],
+    [/^Modelo · total (\d+)$/, 'Modello · totale $1', 'Model · total $1'], [/^Modelo (\d+ %) · Histórico (\S+) (.+)$/, 'Modello $1 · Storico $2 $3', 'Model $1 · History $2 $3'],
+    [/^Diferencia de puntos de (\S+) en cada partido( en casa| fuera)?\. Por encima de 0 = ganó\. Pulsa una barra para ver el marcador\.$/, m => `Differenza punti di ${m[1]} in ogni partita${m[2] ? (m[2] === ' en casa' ? ' in casa' : ' in trasferta') : ''}. Sopra lo 0 = ha vinto. Tocca una barra per vedere il punteggio.`, m => `${m[1]} point differential in each game${m[2] ? (m[2] === ' en casa' ? ' at home' : ' away') : ''}. Above 0 = won. Tap a bar to see the score.`],
+    [/^Diferencia de puntos de (\S+)\. Cubre el (\S+) si la barra supera (\S+)\.$/, 'Differenza punti di $1. Copre il $2 se la barra supera $3.', '$1 point differential. Covers $2 if the bar is above $3.'],
+    [/^Puntos de (\S+) en cada partido\.$/, 'Punti di $1 in ogni partita.', '$1 points in each game.'], [/^Puntos totales en los partidos de (\S+)\.$/, 'Punti totali nelle partite di $1.', 'Total points in $1 games.'],
+    [/^Le faltaban titulares: (.+)$/, m => 'Mancavano titolari: ' + m[1].replace(/\(sin /g, '(senza '), m => 'Missing starters: ' + m[1].replace(/\(sin /g, '(without ')],
+    [/^(.+) en (\d+) min$/, '$1 in $2 min', '$1 in $2 min'], [/^(.+) · sin (.+)$/, '$1 · senza $2', '$1 · without $2'],
+    [/^Semana (\d+) · (.+)$/, 'Settimana $1 · $2', 'Week $1 · $2'], [/^Semana del (.+)$/, 'Settimana del $1', 'Week of $1'],
+    [/^Noche del (.+) al (.+)$/, m => `Notte tra ${m[1].replace(/ de /g, ' ')} e ${m[2].replace(/ de /g, ' ')}`, m => `Night of ${m[1].replace(/ de /g, ' ')} to ${m[2].replace(/ de /g, ' ')}`],
+    [/^Datos al día · (.+)$/, 'Dati aggiornati · $1', 'Data up to date · $1'], [/^Datos sin actualizar · (.+)$/, 'Dati non aggiornati · $1', 'Data out of date · $1'], [/^Estadísticas: (.+)$/, 'Statistiche: $1', 'Stats: $1'], [/^Actualizado (.+)$/, 'Aggiornato $1', 'Updated $1'],
+    [/^(\d+) cargadas(?: \((\d+) automáticas, (\d+) tuyas\))? · (.+) · solo tú ves esta pestaña$/, m => `${m[1]} caricate${m[2] ? ` (${m[2]} automatiche, ${m[3]} tue)` : ''} · ${m[4].replace('Estadísticas:', 'Statistiche:')} · questa scheda la vedi solo tu`, m => `${m[1]} loaded${m[2] ? ` (${m[2]} automatic, ${m[3]} yours)` : ''} · ${m[4].replace('Estadísticas:', 'Stats:')} · only you can see this tab`],
+    [/^Guardar (\d+) para todos$/, 'Salva $1 per tutti', 'Save $1 for everyone'], [/^Guardadas (\d+) cuotas\. Tus amigos ya las ven\.$/, 'Salvate $1 quote. I tuoi amici le vedono già.', 'Saved $1 odds. Your friends can see them now.'],
+    [/^(\d+) selecciones · combinada$/, '$1 selezioni · multipla', '$1 selections · parlay'], [/^Combinada · (\d+)$/, 'Multipla · $1', 'Parlay · $1'],
+    [/^(.+) a ([\d.,]+) · cobra (.+)$/, '$1 a $2 · incassi $3', '$1 at $2 · pays $3'], [/^Ganada (.+)$/, 'Vinta $1', 'Won $1'], [/^Perdida (.+)$/, 'Persa $1', 'Lost $1'],
+    [/^acertadas · (\d+) de (\d+)$/, 'vinte · $1 su $2', 'won · $1 of $2'], [/^rentabilidad · (.+) apostados$/, 'rendimento · $1 giocati', 'return · $1 staked'],
+    [/^Con valor (.+)$/, 'Di valore $1', 'Value $1'], [/^Sin valor (.+)$/, 'Senza valore $1', 'No value $1'], [/^Justo (.+)$/, 'Equa $1', 'Fair $1'], [/^([+−-]?\d+) valor$/, '$1 valore', '$1 value'],
+    [/^Línea de hoy (.+)$/, m => 'Linea di oggi ' + m[1].replace(/ · más /g, ' · più ').replace(/ · menos /g, ' · meno ').replace(' · La cuota le da', ' · La quota gli dà'), m => 'Today\'s line ' + m[1].replace(/ · más /g, ' · over ').replace(/ · menos /g, ' · under ').replace(' · La cuota le da', ' · The odds give')],
+    [/^La cuota le da (.+)$/, 'La quota gli dà $1', 'The odds give $1'], [/^(.*)La cuota le da$/, '$1La quota gli dà', '$1The odds give'], [/^\(este tramo (.+)\)$/, '(questo periodo $1)', '(this range $1)'],
+    [/^Su media en los últimos 10: (.+)$/, 'Media nelle ultime 10: $1', 'Last-10 average: $1'], [/^Le faltan (\d+)$/, 'Gli mancano $1', '$1 to go'], [/^ · margen (.+)$/, ' · margine $1', ' · margin $1'],
+    [/^modelo (\d+ %) · sin cuota$/, 'modello $1 · senza quota', 'model $1 · no odds'], [/^modelo (\d+ %) · cuota (.+)$/, 'modello $1 · quota $2', 'model $1 · odds $2'],
+    [/^Empieza a las (.+)$/, 'Inizia alle $1', 'Starts at $1'], [/^(\S+) gana de (\d+)$/, '$1 vince di $2', '$1 winning by $2'], [/^(\S+) pierde de (\d+)$/, '$1 perde di $2', '$1 losing by $2'],
+    [/^Van (\d+) · línea (.+)$/, 'Sono a $1 · linea $2', 'At $1 · line $2'], [/^(\S+) (\S+) · con el hándicap (\S+)$/, '$1 $2 · con l\'handicap $3', '$1 $2 · with the spread $3'],
+    [/^(\d)\.º cuarto · (.+)$/, '$1º quarto · $2', 'Q$1 · $2'], [/^(\d)\.º cuarto$/, '$1º quarto', 'Q$1'], [/^Fin del (\d)\.º cuarto$/, 'Fine del $1º quarto', 'End of Q$1'], [/^Fin del (\d)\.º$/, 'Fine $1º', 'End Q$1'],
+    [/^Fin de la prórroga$/, 'Fine del supplementare', 'End of OT'], [/^Prórroga(.*)$/, 'Supplementare$1', 'OT$1'], [/^1\.er cuarto · (.+)$/, '1º quarto · $1', 'Q1 · $1'],
+    [/^(\S+): el directo de estas selecciones se ve al elegir (\S+) arriba\.$/, '$1: la diretta di queste selezioni si vede scegliendo $2 in alto.', '$1: live tracking for these selections shows when you pick $2 at the top.'],
+    [/^Se sigue en (\S+): cámbialo arriba$/, 'Si segue in $1: cambialo in alto', 'Followed in $1: switch at the top'],
+    [/^Aún no hay datos (\S+)$/, 'Ancora nessun dato $1', 'No $1 data yet'], [/^Ejecuta actualizar_(\S+)\.py --subir en el ordenador del administrador\.$/, 'Esegui actualizar_$1.py --subir sul computer dell\'amministratore.', 'Run actualizar_$1.py --subir on the administrator\'s computer.'],
+    [/^(\S+) no juega hoy$/, '$1 non gioca oggi', '$1 is not playing today'], [/^Def\. (\S+)$/, 'Dif. $1', 'Def. $1'],
+    [/^([A-Z]{3}) · (.+) \((.+)\)$/, (m, w) => `${m[1]} · ${w(m[2])} (${m[3]})`, (m, w) => `${m[1]} · ${w(m[2])} (${m[3]})`],
+    [/^(\d+)\/(\d+) últimos$/, '$1/$2 ultime', '$1/$2 last'], [/^Importe \((.+)\)$/, 'Importo ($1)', 'Stake ($1)'],
+    [/^([A-Z]{2,4}) · ([^·]+?)( · (?:@|vs) [A-Z]{2,4} · .+)?$/, (m, w) => `${m[1]} · ${w(m[2])}${m[3] || ''}`, (m, w) => `${m[1]} · ${w(m[2])}${m[3] || ''}`],
+    [/^(.+) · ([A-Z]{2,4})$/, (m, w) => `${w(m[1])} · ${m[2]}`, (m, w) => `${w(m[1])} · ${m[2]}`],
+    [/^(.+) · (.+) ([\d.,]+)$/, (m, w) => `${m[1]} · ${w(m[2])} ${m[3]}`, (m, w) => `${m[1]} · ${w(m[2])} ${m[3]}`],
+    [/^([\d.,]+) (.+)$/, (m, w) => `${m[1]} ${w(m[2])}`, (m, w) => `${m[1]} ${w(m[2])}`],
+    [/^(Error al guardar|Error al borrar|Error al guardar el código|No se pudo cambiar|No se pudo entrar|No se pudo crear la cuenta|No se pudo guardar): (.+)$/,
+      m => ({ 'Error al guardar': 'Errore nel salvataggio', 'Error al borrar': 'Errore nell\'eliminazione', 'Error al guardar el código': 'Errore nel salvare il codice', 'No se pudo cambiar': 'Impossibile cambiarla', 'No se pudo entrar': 'Impossibile entrare', 'No se pudo crear la cuenta': 'Impossibile creare l\'account', 'No se pudo guardar': 'Impossibile salvare' }[m[1]] + ': ' + m[2]),
+      m => ({ 'Error al guardar': 'Error saving', 'Error al borrar': 'Error deleting', 'Error al guardar el código': 'Error saving the code', 'No se pudo cambiar': 'Could not change it', 'No se pudo entrar': 'Could not log in', 'No se pudo crear la cuenta': 'Could not create the account', 'No se pudo guardar': 'Could not save' }[m[1]] + ': ' + m[2])],
+  ];
+  const dict = {}; if (col) for (const row of T) dict[row[0]] = row[col];
+  const lower = {}; if (col) for (const row of T) lower[row[0].toLowerCase()] = row[col];
+  /* Traduce un trozo (nombre de estadística, posición…): exacto o sin distinguir mayúsculas, respetando la inicial. */
+  const w = x => { if (dict[x] != null) return dict[x]; const y = lower[x.toLowerCase()]; if (y == null) return x; return x[0] === x[0].toLowerCase() ? y[0].toLowerCase() + y.slice(1) : y; };
+  const rules = col ? R.map(r => [r[0], r[col]]) : [];
+  function tr(txt) {
+    const t = txt.trim(); if (!t || !col) return txt;
+    let out = dict[t] ?? (lower[t.toLowerCase()] != null ? w(t) : null);   // también en minúsculas (p. ej. «puntos»)
+    if (out == null) for (const [re, rep] of rules) { const m = re.exec(t); if (m) { out = typeof rep === 'function' ? rep(m, w) : t.replace(re, rep); break; } }
+    return out == null ? txt : txt.replace(t, out);
+  }
+  const ATTRS = ['placeholder', 'aria-label', 'title'];
+  function walk(root) {
+    if (root.nodeType === 3) { const v = tr(root.data); if (v !== root.data) root.data = v; return; }
+    if (root.nodeType !== 1) return;
+    const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let n = tw.nextNode(); n; n = tw.nextNode()) { const v = tr(n.data); if (v !== n.data) n.data = v; }
+    for (const el of [root, ...root.querySelectorAll('[placeholder],[aria-label],[title]')]) for (const a of ATTRS) {
+      const v = el.getAttribute(a); if (v) { const x = tr(v); if (x !== v) el.setAttribute(a, x); }
+    }
+  }
+  if (col) {
+    document.documentElement.lang = lang;
+    new MutationObserver(ms => { for (const m of ms) m.addedNodes.forEach(walk); }).observe(document.getElementById('app'), { childList: true, subtree: true });
+  }
+  return { tr };
+})();

@@ -7,6 +7,9 @@ const DEMO = !CFG.supabaseUrl || !CFG.supabaseAnonKey || /[?&]demo\b/.test(locat
 const app = document.getElementById('app');
 /* Liga elegida con el selector de arriba (se guarda en este navegador y la página se recarga al cambiarla). */
 const LIGA = window.TRIBUNA_LIGA === 'nfl' ? 'nfl' : 'nba', NFL = LIGA === 'nfl';
+/* Idioma (lo traduce i18n.js sobre lo que se pinta) y formato de fechas y números. */
+const LANG = ['es', 'it', 'en'].includes(window.TRIBUNA_LANG) ? window.TRIBUNA_LANG : 'es';
+const LOC = { es: 'es-ES', it: 'it-IT', en: 'en-GB' }[LANG];
 
 /* ---------- utilidades ---------- */
 const PER_LIGA = new Set(['lines', 'uodds', 'sides', 'demo-odds']);   // líneas y cuotas propias: por liga. Boleto y apuestas: uno para todas
@@ -16,7 +19,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(skey(k), JSON.stringify(v)); } catch (e) {} },
 };
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const dec = (v, d = 1) => (v == null || !isFinite(v)) ? '–' : Number(v).toLocaleString('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d });
+const dec = (v, d = 1) => (v == null || !isFinite(v)) ? '–' : Number(v).toLocaleString(LOC, { minimumFractionDigits: d, maximumFractionDigits: d });
 const pct = p => (p == null || !isFinite(p)) ? '–' : Math.round(p * 100) + '\u00a0%';
 const signed = v => (v > 0 ? '+' : v < 0 ? '−' : '') + dec(Math.abs(v));
 const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
@@ -37,13 +40,13 @@ function etToRome(dateStr, status) {
   const offH = parseInt(off.replace('GMT', '')) || -5;
   const utc = new Date(Date.UTC(y, mo - 1, d, h - offH, +m[2]));
   return {
-    time: utc.toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }),
-    day: utc.toLocaleDateString('es-ES', { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', month: 'short' }),
+    time: utc.toLocaleTimeString(LOC, { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }),
+    day: utc.toLocaleDateString(LOC, { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', month: 'short' }),
   };
 }
 function nightLabel(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number), a = new Date(Date.UTC(y, m - 1, d)), b = new Date(Date.UTC(y, m - 1, d + 1));
-  const wd = x => x.toLocaleDateString('es-ES', { weekday: 'long', timeZone: 'UTC' }), mo = x => x.toLocaleDateString('es-ES', { month: 'long', timeZone: 'UTC' });
+  const wd = x => x.toLocaleDateString(LOC, { weekday: 'long', timeZone: 'UTC' }), mo = x => x.toLocaleDateString(LOC, { month: 'long', timeZone: 'UTC' });
   return `Noche del ${wd(a)} ${a.getUTCDate()}${mo(a) !== mo(b) ? ' de ' + mo(a) : ''} al ${wd(b)} ${b.getUTCDate()} de ${mo(b)}`;
 }
 const ICON = {
@@ -169,7 +172,7 @@ const gameOfTeam = t => D.games.find(g => g.home === t || g.away === t);
 const FUT = {};      // fecha EE. UU. -> lista de partidos | 'loading' | 'error'
 const findGame = id => D.games.find(x => x.id === id) || Object.values(FUT).flatMap(x => Array.isArray(x) ? x : []).find(x => x.id === id) || null;
 function gameTime(g) {
-  if (g.start) { const d = new Date(g.start); return { time: d.toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }), day: d.toLocaleDateString('es-ES', { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', month: 'short' }) }; }
+  if (g.start) { const d = new Date(g.start); return { time: d.toLocaleTimeString(LOC, { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }), day: d.toLocaleDateString(LOC, { timeZone: 'Europe/Rome', weekday: 'short', day: 'numeric', month: 'short' }) }; }
   return etToRome(g.date, g.status);
 }
 const addDays = (iso, n) => { const [y, m, d] = iso.split('-').map(Number); return isoDay(new Date(Date.UTC(y, m - 1, d + n))); };
@@ -488,8 +491,10 @@ function topBar(title, withBack) {
   const mIcon = mode === 'light' ? ICON.sun : mode === 'dark' ? ICON.moon : ICON.auto;
   const mLab = mode === 'light' ? 'Modo claro' : mode === 'dark' ? 'Modo oscuro' : 'Modo automático';
   return `<header class="top">${withBack ? `<button class="ic" data-act="back" aria-label="Volver">${ICON.back}</button><div class="ttl">${esc(title)}</div>` : `<div class="brand">Tribuna<i>.</i></div>${ligaSel()}`}${!withBack ? fresh() : ''}
-    <button class="ic" data-act="mode" aria-label="${mLab}" title="${mLab}">${mIcon}</button></header>`;
+    <button class="ic" data-act="mode" aria-label="${mLab}" title="${mLab}">${mIcon}</button>${D && !withBack ? `<button class="ic me" data-nav="config" aria-label="Configuración" title="Configuración">${profilePic(36)}</button>` : ''}</header>`;
 }
+/* Foto de perfil predeterminada: silueta sobre el color de acento. */
+const profilePic = size => `<span class="pfp" style="--ps:${size}px" aria-hidden="true"><svg viewBox="0 0 40 40"><circle cx="20" cy="15" r="7.5"/><path d="M6 36c1.5-8 7.5-12 14-12s12.5 4 14 12z"/></svg></span>`;
 const ligaSel = () => `<div class="seg liga" role="group" aria-label="Liga">${[['nba', 'NBA'], ['nfl', 'NFL']].map(([v, l]) => `<button data-liga="${v}" aria-pressed="${LIGA === v}">${l}</button>`).join('')}</div>`;
 function fresh() {
   if (!D) return '';
@@ -503,15 +508,26 @@ function tabBar() {
   const root = { hoy: 'hoy', game: 'hoy', player: 'hoy', props: 'props', slip: 'slip', bets: 'bets', admin: 'admin' }[S.view];
   return `<div class="tabbar"><nav>${t.map(([v, l, i]) => `<button data-nav="${v}" ${root === v ? 'aria-current="page"' : ''}>${i}${l}${v === 'slip' && slip.length ? `<span class="badge">${slip.length}</span>` : ''}</button>`).join('')}</nav></div>`;
 }
-const legal = () => `<footer class="legal">Estimaciones a partir de partidos pasados; no garantizan nada. +18 · Juega solo lo que puedas permitirte perder.${DEMO ? '<br>Modo demostración: estadísticas y cuotas simuladas.' : `<div class="acct">Sesión: <b>${esc(userEmail)}</b>${isAdmin ? ' · administrador' : ''} · <button class="linkb" data-act="logout">Cerrar sesión</button>
-  <details class="np"><summary>Cambiar mi contraseña</summary><form id="newpass"><input id="np" class="field" type="password" minlength="6" required autocomplete="new-password" placeholder="Nueva contraseña (mín. 6)" aria-label="Nueva contraseña"><button class="btn ghost sm-btn" type="submit">Guardar</button></form><div id="npmsg" class="sm"></div></details></div>`}</footer>`;
-const updatedTxt = () => { const d = new Date(D.updated); return isNaN(d) ? '' : 'Estadísticas: ' + d.toLocaleString('es-ES', { timeZone: 'Europe/Rome', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); };
+const legal = () => `<footer class="legal">Estimaciones a partir de partidos pasados; no garantizan nada. +18 · Juega solo lo que puedas permitirte perder.${DEMO ? '<br>Modo demostración: estadísticas y cuotas simuladas.' : ''}</footer>`;
+/* ---------- vista: configuración ---------- */
+function viewConfig() {
+  const LANGS = [['es', 'Español'], ['it', 'Italiano'], ['en', 'English']];
+  return `${topBar('Configuración', true)}<div class="stack fade">
+    <div class="card pad profile">${profilePic(64)}<div style="min-width:0"><div class="mut xs">Cuenta</div><b class="mail">${DEMO ? 'Modo demostración' : esc(userEmail)}</b>${isAdmin ? '<div><span class="pill acc">Administrador</span></div>' : ''}</div></div>
+    <div class="card pad stack"><h3>Idioma</h3><div class="seg wide" role="group" aria-label="Idioma">${LANGS.map(([v, l]) => `<button data-lang="${v}" aria-pressed="${LANG === v}" lang="${v}">${l}</button>`).join('')}</div></div>
+    <div class="card pad stack"><h3>Moneda</h3><label for="cur" class="sm mut">Las cantidades de tus apuestas, ganancias y calendario se muestran en esta moneda (no se convierten).</label>
+      <select id="cur" class="field">${CURS.map(([c, n]) => `<option value="${c}"${CUR === c ? ' selected' : ''}>${c} · ${n} (${curSym(c)})</option>`).join('')}</select></div>
+    ${DEMO ? '' : `<div class="card pad stack"><h3>Contraseña</h3><form id="newpass" class="ctl" style="gap:8px"><input id="np" class="field" type="password" minlength="6" required autocomplete="new-password" placeholder="Nueva contraseña (mín. 6)" aria-label="Nueva contraseña" style="flex:1;min-width:0"><button class="btn ghost" type="submit">Guardar</button></form><div id="npmsg" class="sm"></div></div>
+    <button class="btn danger" data-act="logout">Cerrar sesión</button>`}
+    ${legal()}</div>`;
+}
+const updatedTxt = () => { const d = new Date(D.updated); return isNaN(d) ? '' : 'Estadísticas: ' + d.toLocaleString(LOC, { timeZone: 'Europe/Rome', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); };
 
 /* ---------- vista: hoy ---------- */
 function dayChips(today) {
   return `<div class="days" role="tablist" aria-label="Día">${Array.from({ length: 7 }, (_, i) => { const d = addDays(today, i), dt = new Date(d + 'T12:00:00Z');
     const on = (S.day || today) === d;
-    return `<button role="tab" data-day="${d}" aria-selected="${on}"><small>${i === 0 ? 'Hoy' : dt.toLocaleDateString('es-ES', { weekday: 'short', timeZone: 'UTC' }).replace('.', '')}</small><b>${dt.getUTCDate()}</b></button>`; }).join('')}</div>`;
+    return `<button role="tab" data-day="${d}" aria-selected="${on}"><small>${i === 0 ? 'Hoy' : dt.toLocaleDateString(LOC, { weekday: 'short', timeZone: 'UTC' }).replace('.', '')}</small><b>${dt.getUTCDate()}</b></button>`; }).join('')}</div>`;
 }
 function viewDay(date, today) {
   const L = FUT[date];
@@ -534,7 +550,7 @@ function viewDay(date, today) {
 }
 /* NFL: la jornada es una semana (jueves a lunes), así que se enseñan todos sus partidos con día y hora. */
 function weekLabel() {
-  const ds = D.games.map(g => g.date).sort(), f = d => new Date(d + 'T12:00:00Z').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const ds = D.games.map(g => g.date).sort(), f = d => new Date(d + 'T12:00:00Z').toLocaleDateString(LOC, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   return ds.length ? `Semana ${D.games[0].week || ''} · ${f(ds[0])}${ds[ds.length - 1] !== ds[0] ? ' – ' + f(ds[ds.length - 1]) : ''}` : '';
 }
 function viewHoy() {
@@ -597,7 +613,7 @@ function bajasCard(g) {
     return `<div><div class="row-between"><b>${t}</b><span class="note">${loss >= .05 ? '−' + dec(loss) + ' pts' : 'sin efecto'}</span></div>
       ${L.length ? `<ul class="bajas">${L.map(x => `<li><button class="linkb" data-pid="${x.p.id}">${esc(x.p.name)}</button> <span class="pill ${x.b.status === 'out' ? 'bad' : x.b.status === 'probable' ? '' : 'acc'}">${BAJA_N[x.b.status]}</span>${x.imp * x.w >= .3 ? ` <span class="mut xs">−${dec(x.imp * x.w)}</span>` : ''}${x.b.note ? `<div class="mut xs">${esc(x.b.note)}</div>` : ''}</li>`).join('')}</ul>` : '<div class="mut sm">Sin bajas</div>'}</div>`;
   });
-  return `<div class="card pad"><div class="row-between"><h3>Bajas</h3><span class="note">${BAJAS_AT ? 'Actualizado ' + new Date(BAJAS_AT).toLocaleString('es-ES', { timeZone: 'Europe/Rome', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Sin parte de lesiones cargado'}</span></div>
+  return `<div class="card pad"><div class="row-between"><h3>Bajas</h3><span class="note">${BAJAS_AT ? 'Actualizado ' + new Date(BAJAS_AT).toLocaleString(LOC, { timeZone: 'Europe/Rome', day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Sin parte de lesiones cargado'}</span></div>
     <div class="bajas-grid">${cols.join('')}</div>
     <p class="note" style="margin:8px 0 0">${NFL ? 'El modelo solo descuenta la baja del quarterback titular (unos 3,5 puntos; las dudas cuentan a medias). El resto de bajas sale como aviso.' : 'El modelo ya descuenta estas bajas (las dudas cuentan a medias). Lo que pierde cada equipo sale de lo que aporta el jugador frente a un suplente.'}</p></div>`;
 }
@@ -850,7 +866,7 @@ function viewSlip() {
     <div class="sum"><div><small>Probabilidad estimada</small><b>${pct(prob)}</b></div><div><small>Cuota justa</small><b>${prob > 0 ? dec(1 / prob, 2) : '–'}</b></div><div><small>Cuota combinada</small><b>${comb ? dec(comb, 2) : '–'}</b></div><div><small>Valor</small><b>${edge != null ? verdict(edge) : '<span class="mut sm">Falta alguna cuota</span>'}</b></div></div>
     <p class="note">Multiplica las probabilidades como si fueran independientes.${sameGame ? ' Hay selecciones del mismo partido: en la realidad suelen estar relacionadas y el resultado puede ser distinto.' : ''}</p>
     <form id="placebet" class="card pad stack"><h3>¿La has jugado? Regístrala</h3>
-      <div class="place"><label>Importe (€)<input id="stake" class="field" type="number" min="0.1" step="any" inputmode="decimal" required placeholder="10" value="${esc(S.stake)}"></label>
+      <div class="place"><label>Importe (${curSym(CUR)})<input id="stake" class="field" type="number" min="0.1" step="any" inputmode="decimal" required placeholder="10" value="${esc(S.stake)}"></label>
         <label>Cuota que te dieron<input id="betodd" class="field" type="number" min="1.01" step="any" inputmode="decimal" required placeholder="${comb ? dec(comb, 2) : '1,90'}" value="${esc(S.betOdd || (comb ? (Math.round(comb * 100) / 100) : ''))}"></label></div>
       <div class="row-between"><span class="sm mut">Cobras <b id="topay" class="hi">${num(S.stake) > 0 && num(S.betOdd || comb) > 1 ? eur(num(S.stake) * num(S.betOdd || comb)) : '–'}</b></span><button class="btn" type="submit">Registrar ${legs.length > 1 ? 'combinada' : 'apuesta'}</button></div>
       <div class="note">Se guarda en «Apuestas» y la sigues en directo durante el partido.</div></form>
@@ -937,7 +953,12 @@ function viewJoin(msg) {
 const showLogin = (msg, email) => { app.innerHTML = `<div class="shell">${viewLogin(msg, email)}</div>`; };
 
 /* ---------- mis apuestas: registro, directo, calendario y gráfico ---------- */
-const eur = v => (v < 0 ? '−' : '') + Math.abs(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '\u00a0€';
+const CURS = [['EUR', 'Euro'], ['USD', 'Dólar estadounidense'], ['GBP', 'Libra esterlina'], ['CHF', 'Franco suizo'], ['MXN', 'Peso mexicano'], ['ARS', 'Peso argentino'], ['COP', 'Peso colombiano'], ['CLP', 'Peso chileno'], ['PEN', 'Sol peruano']];
+let CUR = store.get('cur', 'EUR');
+const SYM = { PEN: 'S/' };   // el navegador escribe «PEN»; en Perú se usa «S/»
+const money = (v, d = 2) => new Intl.NumberFormat(LOC, { style: 'currency', currency: CUR, currencyDisplay: 'narrowSymbol', minimumFractionDigits: d, maximumFractionDigits: d }).format(Math.abs(v)).replace(CUR, SYM[CUR] || CUR);
+const eur = v => (v < 0 ? '−' : '') + money(v);
+const curSym = c => SYM[c] || new Intl.NumberFormat(LOC, { style: 'currency', currency: c, currencyDisplay: 'narrowSymbol' }).formatToParts(0).find(x => x.type === 'currency').value;
 const eurS = v => (v > 0 ? '+' : '') + eur(v);
 const isoDay = d => d.toISOString().slice(0, 10);
 const LIVE = {};               // gameId -> { state: 'pre'|'live'|'final', text, home:{tri,score}, away:{tri,score}, players:{pid:{...}} }
@@ -1260,7 +1281,7 @@ function profitChart(days) {
   const y = v => pt + (H - pt - pb) * (1 - (v - (lo - pad)) / (hi + pad - (lo - pad))), slot = (W - pl - 4) / n, bw = Math.max(2, Math.min(18, slot * .62));
   let s = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Beneficio acumulado">`;
   s += `<line x1="${pl}" x2="${W}" y1="${y(0)}" y2="${y(0)}" stroke="var(--mut)" stroke-opacity=".5"/><text x="${pl - 6}" y="${y(0) + 4}" text-anchor="end" font-size="10" fill="var(--mut)">0</text>`;
-  [hi, lo].forEach(v => { if (Math.abs(v) > 0.01) s += `<text x="${pl - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="var(--mut)">${Math.round(v)} €</text><line x1="${pl}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--edge)"/>`; });
+  [hi, lo].forEach(v => { if (Math.abs(v) > 0.01) s += `<text x="${pl - 6}" y="${y(v) + 4}" text-anchor="end" font-size="10" fill="var(--mut)">${(v < 0 ? '−' : '') + money(v, 0)}</text><line x1="${pl}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="var(--edge)"/>`; });
   days.forEach((d, i) => { const x = pl + i * slot + (slot - bw) / 2, t = Math.min(y(d.net), y(0)), h = Math.max(1.5, Math.abs(y(d.net) - y(0)));
     s += `<rect x="${x}" y="${t}" width="${bw}" height="${h}" rx="${Math.min(3, bw / 3)}" fill="${d.net >= 0 ? 'var(--good)' : 'var(--bad)'}" opacity=".55"><title>${esc(d.lab)}: ${eurS(d.net)}</title></rect>`; });
   s += `<polyline fill="none" stroke="var(--acc)" stroke-width="2.4" stroke-linejoin="round" points="${cs.map((v, i) => `${pl + i * slot + slot / 2},${y(v)}`).join(' ')}"/>`;
@@ -1374,16 +1395,16 @@ function betLive(b, s) {
 function calendar(netMap) {
   const [y, m] = S.calMonth.split('-').map(Number), first = new Date(Date.UTC(y, m - 1, 1)), days = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const lead = (first.getUTCDay() + 6) % 7, today = refDay();
-  const title = first.toLocaleDateString('es-ES', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const title = first.toLocaleDateString(LOC, { month: 'long', year: 'numeric', timeZone: 'UTC' });
   let monthNet = 0, cells = '';
   for (let i = 0; i < lead; i++) cells += '<span></span>';
   for (let d = 1; d <= days; d++) {
     const k = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, v = netMap[k]; if (v != null) monthNet += v;
-    cells += `<button class="cd ${v == null ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero'}${k === today ? ' today' : ''}" data-calday="${k}" aria-pressed="${S.calDay === k}" ${v == null && k !== today ? 'disabled' : ''}><span>${d}</span>${v != null ? `<small>${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.round(Math.abs(v))}</small>` : ''}</button>`;
+    cells += `<button class="cd ${v == null ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero'}${k === today ? ' today' : ''}" data-calday="${k}" aria-pressed="${S.calDay === k}" ${v == null && k !== today ? 'disabled' : ''}><span>${d}</span>${v != null ? `<small>${v > 0 ? '+' : v < 0 ? '−' : ''}${money(v, 0)}</small>` : ''}</button>`;
   }
   return `<div class="card pad">
     <div class="row-between"><button class="ic" data-calnav="-1" aria-label="Mes anterior">${ICON.back}</button><div style="text-align:center"><b>${esc(title.charAt(0).toUpperCase() + title.slice(1))}</b><div class="xs ${monthNet > 0 ? 'ok' : monthNet < 0 ? 'err' : 'mut'}">${eurS(monthNet)}</div></div><button class="ic flip" data-calnav="1" aria-label="Mes siguiente">${ICON.back}</button></div>
-    <div class="cal">${['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(d => `<em>${d}</em>`).join('')}${cells}</div></div>`;
+    <div class="cal">${Array.from({ length: 7 }, (_, i) => `<em>${new Date(Date.UTC(2024, 0, 1 + i)).toLocaleDateString(LOC, { weekday: 'narrow', timeZone: 'UTC' }).toUpperCase()}</em>`).join('')}${cells}</div></div>`;
 }
 function viewBets() {
   settleAll();
@@ -1395,7 +1416,7 @@ function viewBets() {
   let series = [];
   if (S.range === 'day') { let i = 0; series = closed.map(b => ({ net: b.net, lab: legLabel(b.legs[0]), short: String(++i) })); }
   else if (nDays > 120) { const mm = {}; for (const [d, v] of Object.entries(netMap)) if (d >= sIso && d <= today) { const k = d.slice(0, 7); mm[k] = (mm[k] || 0) + v; }
-    series = Object.keys(mm).sort().map(k => ({ net: mm[k], lab: k, short: new Date(k + '-01T00:00:00Z').toLocaleDateString('es-ES', { month: 'short', timeZone: 'UTC' }) })); }
+    series = Object.keys(mm).sort().map(k => ({ net: mm[k], lab: k, short: new Date(k + '-01T00:00:00Z').toLocaleDateString(LOC, { month: 'short', timeZone: 'UTC' }) })); }
   else if (nDays > 31) { const wk = {}; for (const [d, v] of Object.entries(netMap)) if (d >= sIso && d <= today) { const dd = new Date(d + 'T00:00:00Z'), mon = isoDay(new Date(dd - ((dd.getUTCDay() + 6) % 7) * 864e5)); wk[mon] = (wk[mon] || 0) + v; }
     series = Object.keys(wk).sort().map(k => ({ net: wk[k], lab: 'Semana del ' + fdate(new Date(k + 'T00:00:00Z')), short: fdate(new Date(k + 'T00:00:00Z')) })); }
   else series = Object.keys(netMap).filter(d => d >= sIso && d <= today).sort().map(d => ({ net: netMap[d], lab: d, short: fdate(new Date(d + 'T00:00:00Z')) }));
@@ -1411,7 +1432,7 @@ function viewBets() {
     ${!DEMO && open.length ? `<p class="note">El directo se actualiza cada 30 segundos con el marcador de ESPN mientras la app está abierta.</p>` : ''}
     <div class="sec-h"><h3>Calendario</h3></div>
     ${calendar(netMap)}
-    ${S.calDay ? `<div class="sec-h"><h3>${new Date(S.calDay + 'T00:00:00Z').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}</h3><span class="${(netMap[S.calDay] || 0) >= 0 ? 'ok' : 'err'} sm" style="font-weight:800">${netMap[S.calDay] != null ? eurS(netMap[S.calDay]) : ''}</span></div>
+    ${S.calDay ? `<div class="sec-h"><h3>${new Date(S.calDay + 'T00:00:00Z').toLocaleDateString(LOC, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })}</h3><span class="${(netMap[S.calDay] || 0) >= 0 ? 'ok' : 'err'} sm" style="font-weight:800">${netMap[S.calDay] != null ? eurS(netMap[S.calDay]) : ''}</span></div>
       ${dayBets.length ? `<div class="stack">${dayBets.map(betCard).join('')}</div>` : '<p class="note">Sin apuestas ese día.</p>'}` : ''}
     ${legal()}</div>`;
 }
@@ -1419,7 +1440,7 @@ function viewBets() {
 /* ---------- render ---------- */
 function render() {
   if (!D) return;
-  const v = { hoy: viewHoy, game: viewGame, player: viewPlayer, props: viewProps, slip: viewSlip, bets: viewBets, admin: viewAdmin }[S.view] || viewHoy;
+  const v = { hoy: viewHoy, game: viewGame, player: viewPlayer, props: viewProps, slip: viewSlip, bets: viewBets, admin: viewAdmin, config: viewConfig }[S.view] || viewHoy;
   const ae = document.activeElement, keep = ae && ae.id ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd } : null;
   const anim = ANIM;
   const fut = S.view === 'game' && findGame(S.gameId)?.future, saved = ODDS;
@@ -1438,6 +1459,8 @@ app.addEventListener('click', async e => {
   const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
   if (d.lmode) { loginMode = d.lmode; return showLogin('', document.getElementById('email')?.value || ''); }
   if (d.liga) { if (d.liga !== LIGA) { store.set('liga', d.liga); location.reload(); } return; }
+  if (d.nav === 'config') return go('config');
+  if (d.lang) { if (d.lang !== LANG) { store.set('lang', d.lang); location.reload(); } return; }
   if (d.nav) { S.back = []; S.view = d.nav; S.msg = ''; render(); window.scrollTo(0, 0); return; }
   if (d.day) { S.day = d.day; const today = D.games[0]?.date || todayET(); if (d.day !== today) loadDay(d.day); return render(); }
   if (d.game) return go('game', { gameId: d.game, market: 'ml', mTeam: null, gtab: 'game', gvenue: 'all' });
@@ -1500,6 +1523,7 @@ app.addEventListener('change', e => {
     if (t.id === 'godd') { const sd = S.market === 'total' || S.market === 'pts' ? getSide(key) : 'over'; if (v > 1) uOdds[key + '|' + sd] = Math.round(v * 100) / 100; else delete uOdds[key + '|' + sd]; }
     saveUser(); render(); }
   if (t.id === 'rest') { S.rest = t.value; render(); }
+  if (t.id === 'cur') { CUR = t.value; store.set('cur', CUR); render(); }
   if (t.id === 'minr') { S.minMin = +t.value; render(); }
 });
 let pasteT;
