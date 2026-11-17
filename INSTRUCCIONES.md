@@ -46,7 +46,8 @@ Crea una cuenta en [github.com](https://github.com) y un repositorio vacío llam
 | Archivo | Para qué |
 | --- | --- |
 | `actualizar_nba.py` | Descarga de NBA.com las estadísticas de esta temporada y la anterior, los partidos de hoy y las posiciones |
-| `ejecutar_actualizacion.bat` | Ejecuta el script y lo sube a Supabase, guardando un registro |
+| `actualizar_nfl.py` | Lo mismo para la NFL, desde nflverse (GitHub, gratis, sin clave): estadísticas de QB, RB, WR y TE, resultados y partidos de la semana |
+| `ejecutar_actualizacion.bat` | Ejecuta los dos scripts y los sube a Supabase, guardando un registro |
 | `programar_tarea_diaria.bat` | Crea la tarea diaria de Windows |
 | `supabase.sql` | Crea las tablas (estadísticas, cuotas, administradores) y los permisos: tus amigos leen, solo tú escribes cuotas |
 | `config.env.ejemplo` | Plantilla para tus claves de Supabase |
@@ -96,3 +97,11 @@ Cada fuente tiene su papel:
 3. Dos tareas de Windows: a las 18:00 `ejecutar_cuotas.bat` y a las 21:00 `ejecutar_cuotas.bat --props`.
 Lo que pase queda en `cuotas.log`; en la pestaña Cuotas de la app ves lo que queda de cada plan.
 Para probar sin subir nada: `py actualizar_cuotas.py --prueba` (o `--solo propline|oddsapi|sgo` para una sola fuente).
+
+### NFL
+- Arriba, junto a «Tribuna», el selector **NBA | NFL** cambia de liga (se recuerda en cada navegador).
+- El **boleto y las apuestas son los mismos para todas las ligas**: puedes juntar en un ticket selecciones de NBA y de NFL. Cada selección lleva su etiqueta de liga; su directo se ve al elegir su liga arriba, y el ticket se cierra cuando todas sus selecciones tienen resultado.
+- La jornada NFL es la semana entera (jueves a lunes): «Esta semana» enseña todos sus partidos con día y hora de Italia.
+- Datos: `actualizar_nfl.py` a las 09:00 (dentro de `ejecutar_actualizacion.bat`). Cuotas y bajas: `py actualizar_cuotas.py --liga nfl`, que `ejecutar_cuotas.bat` lanza solo a las 18:00. Las cuotas NFL se guardan en la misma tabla con el prefijo `nfl:`.
+- No hace falta ejecutar nada nuevo en Supabase.
+- Cuotas a mano: igual que en la NBA, con estas estadísticas: `pyd` (yardas de pase), `ptd`, `cmp`, `att`, `int`, `pry` (pase + carrera), `ryd` (carrera), `car`, `rec`, `reyd` (recepción), `rry` (carrera + recepción), `tgt` y `td` (anota touchdown, línea 0,5). Ejemplo: `Mahomes pyd 265,5 1,87 1,93`.

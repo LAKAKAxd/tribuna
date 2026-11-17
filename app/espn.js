@@ -1,15 +1,17 @@
 /* Tribuna · directo desde la API pública de ESPN (deja leerla desde el navegador; NBA.com no).
    Convierte el marcador y el jugada a jugada de ESPN al mismo formato que usa la app,
-   con los ids de jugador de NBA.com (se emparejan por nombre dentro de cada equipo). */
+   con los ids de jugador de NBA.com o de nflverse (se emparejan por nombre dentro de cada equipo). */
 window.TRIBUNA_ESPN = (function () {
-  const BASE = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba';
-  const TRI = { GS: 'GSW', NO: 'NOP', NY: 'NYK', SA: 'SAS', UTAH: 'UTA', WSH: 'WAS', PHO: 'PHX', BRK: 'BKN', CHO: 'CHA' };
+  const NFL = window.TRIBUNA_LIGA === 'nfl';
+  const BASE = 'https://site.api.espn.com/apis/site/v2/sports/' + (NFL ? 'football/nfl' : 'basketball/nba');
+  const TRI = NFL ? { WSH: 'WAS', LAR: 'LA' } : { GS: 'GSW', NO: 'NOP', NY: 'NYK', SA: 'SAS', UTAH: 'UTA', WSH: 'WAS', PHO: 'PHX', BRK: 'BKN', CHO: 'CHA' };
+  const QL = NFL ? 15 : 12, OTL = NFL ? 10 : 5;   // minutos de cada cuarto y de la prórroga
   const tri = a => TRI[a] || a;
   const key = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
     .replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '').replace(/[^a-z]/g, '');
   const clockPT = c => { const m = /^(\d+):(\d+(?:\.\d+)?)$/.exec(String(c || '').trim()); if (m) return `PT${m[1]}M${m[2]}S`; const s = parseFloat(c); return isFinite(s) ? `PT0M${s}S` : 'PT0M0S'; };
   const clockMin = c => { const m = /PT(\d+)M([\d.]+)S/.exec(c || ''); return m ? +m[1] + +m[2] / 60 : 0; };
-  const elapsed = (period, clock) => period <= 4 ? (period - 1) * 12 + 12 - clockMin(clock) : 48 + (period - 5) * 5 + 5 - clockMin(clock);
+  const elapsed = (period, clock) => period <= 4 ? (period - 1) * QL + QL - clockMin(clock) : 4 * QL + (period - 5) * OTL + OTL - clockMin(clock);
   const ord = n => n <= 4 ? `${n}.º cuarto` : `Prórroga${n > 5 ? ' ' + (n - 4) : ''}`;
 
   /* Estado del partido a partir del bloque status de ESPN. */
@@ -54,6 +56,7 @@ window.TRIBUNA_ESPN = (function () {
     const idOf = {};   // id ESPN -> id NBA (o 'e' + id ESPN si no se encuentra)
     const map = (eid, name, team) => idOf[eid] || (idOf[eid] = byTeam[team]?.[key(name)] || all[key(name)] || 'e' + eid);
     const out = {};
+    if (NFL) return { box: { state, text, q, cl, t: state === 'live' ? elapsed(period || 1, clock) : state === 'final' ? 60 : 0, home, away, players: nflBox(j, map), src: 'espn' }, pbp: {} };
     for (const t of j.boxscore?.players || []) {
       const tm = tri(t.team?.abbreviation);
       for (const grp of t.statistics || []) {
@@ -94,6 +97,27 @@ window.TRIBUNA_ESPN = (function () {
     }
     const tNow = state === 'live' ? elapsed(period || 1, clock) : state === 'final' ? Math.max(48, elapsed(period || 4, 'PT0M0S')) : 0;
     return { box: { state, text, q, cl, t: tNow, home, away, players: out, src: 'espn' }, pbp: ser };
+  }
+
+  /* NFL: une las tablas de pase, carrera y recepción de cada jugador en una sola fila. */
+  function nflBox(j, map) {
+    const out = {}, zero = () => ({ cmp: 0, att: 0, pyd: 0, ptd: 0, int: 0, car: 0, ryd: 0, rtd: 0, tgt: 0, rec: 0, reyd: 0, retd: 0, min: 0 });
+    const COLS = { passing: { 'C/ATT': 'c/att', YDS: 'pyd', TD: 'ptd', INT: 'int' }, rushing: { CAR: 'car', YDS: 'ryd', TD: 'rtd' }, receiving: { REC: 'rec', YDS: 'reyd', TD: 'retd', TGTS: 'tgt' } };
+    for (const t of j.boxscore?.players || []) {
+      const tm = tri(t.team?.abbreviation);
+      for (const grp of t.statistics || []) {
+        const cols = COLS[grp.name]; if (!cols) continue;
+        const lab = (grp.labels || []).map(x => String(x).toUpperCase());
+        for (const a of grp.athletes || []) {
+          const ath = a.athlete || {}, id = map(ath.id, ath.displayName, tm), o = out[id] || (out[id] = { ...zero(), nm: ath.shortName || ath.displayName || '', tm, on: false, pl: true });
+          lab.forEach((l, i) => { const k = cols[l], v = (a.stats || [])[i]; if (!k) return;
+            if (k === 'c/att') { const m = /^(\d+)\/(\d+)$/.exec(String(v || '')); if (m) { o.cmp = +m[1]; o.att = +m[2]; } }
+            else o[k] = +v || 0; });
+          o.min = o.att + o.car + o.tgt;
+        }
+      }
+    }
+    return out;
   }
 
   /* Marcador de todos los partidos de una fecha con una sola consulta: clave 'AWAY@HOME'. */
