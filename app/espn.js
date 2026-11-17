@@ -12,6 +12,20 @@ window.TRIBUNA_ESPN = (function () {
   const elapsed = (period, clock) => period <= 4 ? (period - 1) * 12 + 12 - clockMin(clock) : 48 + (period - 5) * 5 + 5 - clockMin(clock);
   const ord = n => n <= 4 ? `${n}.º cuarto` : `Prórroga${n > 5 ? ' ' + (n - 4) : ''}`;
 
+  /* Estado del partido a partir del bloque status de ESPN. */
+  function status(st) {
+    st = st || {};
+    const state = st.type?.state === 'post' ? 'final' : st.type?.state === 'in' ? 'live' : 'pre';
+    const period = st.period || 0, clock = String(st.displayClock || '').replace(/\.\d+$/, ''), det = String(st.type?.shortDetail || st.type?.detail || '');
+    let q = '', cl = '', text = state === 'final' ? 'Final' : state === 'pre' ? 'Aún no ha empezado' : '';
+    if (state === 'live') {
+      q = ord(period);
+      if (/half/i.test(det)) { q = 'Descanso'; text = 'Descanso'; }
+      else if (/^end/i.test(det)) { q = `Fin ${period <= 4 ? 'del ' + period + '.º' : 'de la prórroga'}`; text = q; }
+      else { cl = clock; text = `${q} · ${clock}`; }
+    }
+    return { state, period, clock: clockPT(st.displayClock), q, cl, text };
+  }
   async function getJSON(url) { const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error('ESPN ' + r.status); return r.json(); }
 
   /* Busca el partido de ESPN de esa fecha (YYYY-MM-DD, hora de EE. UU.) con esos equipos. */
@@ -30,15 +44,7 @@ window.TRIBUNA_ESPN = (function () {
   /* players: lista de { id, name, team } de la app para emparejar nombres. */
   function parseSummary(j, players) {
     const comp = j.header?.competitions?.[0] || {}, st = comp.status || j.status || {};
-    const state = st.type?.state === 'post' ? 'final' : st.type?.state === 'in' ? 'live' : 'pre';
-    const period = st.period || 0, clock = clockPT(st.displayClock);
-    const det = String(st.type?.shortDetail || st.type?.detail || '');
-    let text = state === 'final' ? 'Final' : state === 'pre' ? 'Aún no ha empezado' : '';
-    if (state === 'live') {
-      if (/half/i.test(det)) text = 'Descanso';
-      else if (/^end/i.test(det)) text = `Fin del ${ord(period)}`.replace('Fin del Prórroga', 'Fin de la prórroga');
-      else text = `${ord(period)} · ${String(st.displayClock || '').replace(/\.\d+$/, '')}`;
-    }
+    const { state, period, clock, q, cl, text } = status(st);
     const side = ha => { const c = (comp.competitors || []).find(x => x.homeAway === ha) || {};
       return { tri: tri(c.team?.abbreviation), score: +c.score || 0, periods: (c.linescores || []).map(x => +(x.displayValue ?? x.value) || 0) }; };
     const home = side('home'), away = side('away');
@@ -87,12 +93,22 @@ window.TRIBUNA_ESPN = (function () {
       else if (/turnover/i.test(ty)) { get(a).tov++; push(a, t); if (ids[1] && /steal/i.test(txt)) { get(ids[1]).stl++; push(ids[1], t); } }
     }
     const tNow = state === 'live' ? elapsed(period || 1, clock) : state === 'final' ? Math.max(48, elapsed(period || 4, 'PT0M0S')) : 0;
-    return { box: { state, text, t: tNow, home, away, players: out, src: 'espn' }, pbp: ser };
+    return { box: { state, text, q, cl, t: tNow, home, away, players: out, src: 'espn' }, pbp: ser };
   }
 
+  /* Marcador de todos los partidos de una fecha con una sola consulta: clave 'AWAY@HOME'. */
+  async function scoreboard(date) {
+    const j = await getJSON(`${BASE}/scoreboard?dates=${String(date).replace(/-/g, '')}`), out = {};
+    for (const ev of j.events || []) {
+      const c = ev.competitions?.[0] || {}, cs = c.competitors || [], H = cs.find(x => x.homeAway === 'home') || {}, A = cs.find(x => x.homeAway === 'away') || {};
+      const h = tri(H.team?.abbreviation), a = tri(A.team?.abbreviation), s = status(c.status || ev.status);
+      out[a + '@' + h] = { ...s, home: { tri: h, score: +H.score || 0 }, away: { tri: a, score: +A.score || 0 } };
+    }
+    return out;
+  }
   async function live({ date, home, away, team, players }) {
     const id = await findEvent(date, home, away, team); if (!id) return null;
     return parseSummary(await getJSON(`${BASE}/summary?event=${id}`), players);
   }
-  return { live, parseSummary, findEvent, tri };
+  return { live, scoreboard, parseSummary, findEvent, tri };
 })();

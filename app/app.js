@@ -444,9 +444,15 @@ function viewHoy() {
     </section>
     ${D.games.length ? D.games.map(g => {
       const t = etToRome(g.date, g.status), md = model(g), mlH = ODDS['T:' + g.home + '|ml'], mlA = ODDS['T:' + g.away + '|ml'];
-      return `<button class="card game" data-game="${esc(g.id)}">
-        <div class="teams"><div class="tm">${V.crest(g.away, 68, 'sm')}<b>${g.away}</b><span>${record(g.away, D.cur)}${mlA ? ' · ' + dec(mlA.over, 2) : ''}</span></div>
-        <div class="mid"><b>${esc(t.time)}</b>${g.status && !t.day ? '' : ''}</div>
+      const sc = SCORES[g.id] || LIVE[g.id], on = sc && sc.state === 'live', fin = sc && sc.state === 'final', show = on || fin;
+      const lead = show ? (sc.home.score > sc.away.score ? 'h' : sc.away.score > sc.home.score ? 'a' : '') : '';
+      const mid = on ? `<div class="mid live"><span class="envivo"><i></i>EN VIVO</span><b>${esc(sc.q || '')}</b>${sc.cl ? `<span class="clock">${esc(sc.cl)}</span>` : ''}</div>`
+        : fin ? `<div class="mid"><span class="fin">FINAL</span></div>` : `<div class="mid"><b>${esc(t.time)}</b></div>`;
+      return `<button class="card game${on ? ' is-live' : ''}" data-game="${esc(g.id)}">
+        <div class="teams${show ? ' scored' : ''}"><div class="tm">${V.crest(g.away, 68, 'sm')}<b>${g.away}</b><span>${record(g.away, D.cur)}${mlA ? ' · ' + dec(mlA.over, 2) : ''}</span></div>
+        ${show ? `<div class="pts${lead === 'h' && fin ? ' lose' : ''}">${sc.away.score}</div>` : ''}
+        ${mid}
+        ${show ? `<div class="pts${lead === 'a' && fin ? ' lose' : ''}">${sc.home.score}</div>` : ''}
         <div class="tm">${V.crest(g.home, 68, 'sm')}<b>${g.home}</b><span>${record(g.home, D.cur)}${mlH ? ' · ' + dec(mlH.over, 2) : ''}</span></div></div>
         <div class="wp"><i class="a" style="width:${(1 - md.pHome) * 100}%"></i><i class="h" style="width:${md.pHome * 100}%"></i></div>
         <div class="wp-l"><span>${pct(1 - md.pHome)}</span><span>Modelo · total ${dec(md.total, 0)}</span><span>${pct(md.pHome)}</span></div>
@@ -963,13 +969,19 @@ async function fetchLive(id) {
   if (box && box.state !== 'pre' && openGameIds().includes(id)) { try { const j = await fetchNba('playbyplay', id); if (j) PBP[id] = parsePbp(j); } catch (e) {} }
   return box;
 }
+const SCORES = {};   // gameId -> marcador de la pantalla principal
+async function pollScores() {
+  const E = window.TRIBUNA_ESPN; if (!E || !D.games.length) return;
+  try { const sb2 = await E.scoreboard(D.games[0].date); for (const g of D.games) { const x = sb2[gameKey(g)]; if (x) SCORES[g.id] = x; } } catch (e) { console.warn('Marcador ESPN', e); }
+}
 async function pollLive() {
+  await pollScores();
   const ids = [...new Set(BETS.filter(b => !b.result).flatMap(b => b.legs.map(l => l.gameId)).filter(id => id && D.games.some(g => g.id === id)).concat(openGameIds()))];
   await Promise.all(ids.map(async id => {
     if (LIVE[id]?.state === 'final' && PBP[id]) return;
     try { const box = await fetchLive(id); if (box) { LIVE[id] = box; snapshot(id); } } catch (e) {}
   }));
-  settleAll(); if (['bets'].includes(S.view)) render();
+  settleAll(); if (['bets', 'hoy'].includes(S.view) && !document.querySelector('input:focus,select:focus')) render();
 }
 function startLive() {
   if (DEMO || liveTimer) return;
@@ -1009,8 +1021,9 @@ function simulateLive() {
       const q = Math.min(4, Math.floor((minute - 1) / 12) + 1), left = 12 - ((minute - 1) % 12 + 1);
       lv.state = minute >= 48 ? 'final' : 'live';
       lv.text = minute >= 48 ? 'Final' : left === 0 ? `Fin del ${q}.º cuarto` : `${q}.º cuarto · ${left}:00`;
+      lv.q = minute >= 48 ? '' : left === 0 ? `Fin del ${q}.º` : `${q}.º cuarto`; lv.cl = minute >= 48 || left === 0 ? '' : `${left}:00`;
     }
-    settleAll(); if (S.view === 'bets') render();
+    settleAll(); if (S.view === 'bets' || S.view === 'hoy') render();
     if (minute >= 48) { clearInterval(simT); simT = null; }
   }, 1200);
 }
@@ -1403,7 +1416,7 @@ async function bootReal() {
   (fd.data || []).forEach(r => FONDOS[r.player_id] = r.url);
   const ap = await allRows(() => sb.from('apuestas').select('data').order('created_at', { ascending: true }));
   BETS = (ap.data || []).map(r => r.data); S.calMonth = refDay().slice(0, 7);
-  if (BETS.some(b => !b.result)) startLive();
+  startLive();   // marcador de la pantalla principal y apuestas en juego, cada 30 s
   ODDS = {}; (od.data || []).forEach(r => ODDS[r.player_id + '|' + r.stat] = { line: r.line == null ? null : +r.line, over: r.over_odd == null ? null : +r.over_odd, under: r.under_odd == null ? null : +r.under_odd, src: r.fuente || 'manual', at: r.updated_at });
   if (isAdmin) { const cr = await sb.from('ajustes').select('valor').eq('clave', 'creditos_odds').maybeSingle(); try { oddsCredits = cr.data ? JSON.parse(cr.data.valor) : null; } catch (e) { oddsCredits = null; } }
   render();
