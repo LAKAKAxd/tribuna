@@ -7,8 +7,9 @@
   3. SportsGameOdds (2.500 eventos al mes)   -> última red: solo para lo que siga faltando.
   Lo que no traiga ninguna lo pone el administrador a mano en la pestaña Cuotas (y tiene prioridad).
 
-Uso (en el PC del administrador, después de actualizar_nba.py):
+Uso (en el PC del administrador, después de actualizar_nba.py / actualizar_nfl.py):
     py actualizar_cuotas.py              # 18:00
+    py actualizar_cuotas.py --liga nfl   # cuotas de la jornada NFL (después de actualizar_nfl.py)
     py actualizar_cuotas.py --props      # 21:00 (además permite gastar créditos de The Odds API en props)
     py actualizar_cuotas.py --prueba     # no sube nada; dice qué trae cada fuente y lo que queda de cada plan
     py actualizar_cuotas.py --solo sgo   # probar una sola fuente (propline | oddsapi | sgo)
@@ -54,6 +55,21 @@ STATS_APP = {
     "dd": ("player_double_double", "doubleDouble"),
     "td": ("player_triple_double", "tripleDouble"),
 }
+# NFL: mismas fuentes, otros mercados. "td" = anota touchdown (sí/no).
+STATS_NFL = {
+    "pyd": ("player_pass_yds", "passing_yards"),
+    "ptd": ("player_pass_tds", "passing_touchdowns"),
+    "cmp": ("player_pass_completions", "passing_completions"),
+    "att": ("player_pass_attempts", "passing_attempts"),
+    "int": ("player_pass_interceptions", "passing_interceptions"),
+    "ryd": ("player_rush_yds", "rushing_yards"),
+    "car": ("player_rush_attempts", "rushing_attempts"),
+    "rec": ("player_receptions", "receiving_receptions"),
+    "reyd": ("player_reception_yds", "receiving_yards"),
+    "rry": ("player_rush_reception_yds", "rushing+receiving_yards"),
+    "pry": ("player_pass_rush_yds", "passing+rushing_yards"),
+    "td": ("player_anytime_td", "touchdowns"),
+}
 PL_STAT = {pl: st for st, (pl, _) in STATS_APP.items()}
 SGO_STAT = {sg: st for st, (_, sg) in STATS_APP.items()}
 SI_NO = {"dd", "td"}   # mercados sí/no: línea 0,5, "más" = sí
@@ -70,6 +86,35 @@ MINIMO_SEGURIDAD = 6
 
 PROPLINE = "https://api.prop-line.com/v1/sports/basketball_nba"
 SGO = "https://api.sportsgameodds.com/v2"
+
+EQUIPOS_NFL = {
+    "Arizona Cardinals": "ARI", "Atlanta Falcons": "ATL", "Baltimore Ravens": "BAL", "Buffalo Bills": "BUF",
+    "Carolina Panthers": "CAR", "Chicago Bears": "CHI", "Cincinnati Bengals": "CIN", "Cleveland Browns": "CLE",
+    "Dallas Cowboys": "DAL", "Denver Broncos": "DEN", "Detroit Lions": "DET", "Green Bay Packers": "GB",
+    "Houston Texans": "HOU", "Indianapolis Colts": "IND", "Jacksonville Jaguars": "JAX", "Kansas City Chiefs": "KC",
+    "Las Vegas Raiders": "LV", "Los Angeles Chargers": "LAC", "Los Angeles Rams": "LA", "Miami Dolphins": "MIA",
+    "Minnesota Vikings": "MIN", "New England Patriots": "NE", "New Orleans Saints": "NO", "New York Giants": "NYG",
+    "New York Jets": "NYJ", "Philadelphia Eagles": "PHI", "Pittsburgh Steelers": "PIT", "San Francisco 49ers": "SF",
+    "Seattle Seahawks": "SEA", "Tampa Bay Buccaneers": "TB", "Tennessee Titans": "TEN", "Washington Commanders": "WAS",
+}
+# Lo que cambia de una liga a otra. Las cuotas NFL se guardan con el prefijo "nfl:" para no
+# mezclarse con las de la NBA (hay equipos con las mismas siglas, como DAL o MIA).
+LIGA = {"nombre": "nba", "archivo": "nba.json", "prefijo": "", "sgo": "NBA", "creditos": "creditos_odds"}
+
+
+def usar_liga(liga: str) -> None:
+    global STATS_APP, PL_STAT, SGO_STAT, EQUIPOS, ODDS_API, PROPLINE, ODDS_PROPS
+    if liga != "nfl":
+        return
+    LIGA.update(nombre="nfl", archivo="nfl.json", prefijo="nfl:", sgo="NFL", creditos="creditos_odds_nfl")
+    STATS_APP = STATS_NFL
+    PL_STAT = {pl: st for st, (pl, _) in STATS_APP.items()}
+    SGO_STAT = {sg: st for st, (_, sg) in STATS_APP.items()}
+    EQUIPOS = EQUIPOS_NFL
+    ODDS_API = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl"
+    PROPLINE = "https://api.prop-line.com/v1/sports/americanfootball_nfl"
+    ODDS_PROPS = ["player_pass_yds", "player_rush_yds", "player_reception_yds", "player_receptions", "player_anytime_td"]
+
 
 EQUIPOS = {
     "Atlanta Hawks": "ATL", "Boston Celtics": "BOS", "Brooklyn Nets": "BKN", "Charlotte Hornets": "CHA",
@@ -282,7 +327,7 @@ class PropLine:
                         lado = "over" if nombre in ("over", "yes", "si", "sí") else "under" if nombre in ("under", "no") else None
                         if not lado:
                             continue
-                        nba_id = (o.get("player_id") or "").replace("nba:", "") or None
+                        nba_id = ((o.get("player_id") or "").replace("nba:", "") or None) if LIGA["nombre"] == "nba" else None
                         pid = jug.buscar(o.get("description") or "", nba_id)
                         if pid:
                             acc.add(pid, st, lado, 0.5 if st in SI_NO else punto, precio)
@@ -383,7 +428,7 @@ class SportsGameOdds:
         if not partidos:
             return {}
         r = self.s.get(f"{SGO}/events/", headers={"x-api-key": self.key}, timeout=60, params={
-            "leagueID": "NBA", "oddsAvailable": "true", "limit": 20,
+            "leagueID": LIGA["sgo"], "oddsAvailable": "true", "limit": 20,
             "startsAfter": inicio.strftime("%Y-%m-%dT%H:%M:%SZ"), "startsBefore": fin.strftime("%Y-%m-%dT%H:%M:%SZ")})
         if r.status_code in (401, 403):
             raise RuntimeError("SportsGameOdds: la clave SGO_API_KEY no es válida.")
@@ -468,7 +513,7 @@ class Supa:
     def guardar_creditos(self, info: dict) -> None:
         try:
             self.s.post(f"{self.url}/rest/v1/ajustes", timeout=30, headers={**self.h, "Prefer": "resolution=merge-duplicates"},
-                        data=json.dumps({"clave": "creditos_odds", "valor": json.dumps(info)}))
+                        data=json.dumps({"clave": LIGA["creditos"], "valor": json.dumps(info)}))
         except Exception:
             pass
 
@@ -490,21 +535,23 @@ def main() -> None:
     ap.add_argument("--props", action="store_true", help="permitir gastar créditos de The Odds API en props que falten")
     ap.add_argument("--prueba", action="store_true", help="no sube nada a Supabase")
     ap.add_argument("--solo", choices=["propline", "oddsapi", "sgo"], help="usar una sola fuente (para probar)")
+    ap.add_argument("--liga", choices=["nba", "nfl"], default="nba")
     args = ap.parse_args()
 
     cargar_config()
-    ruta_nba = os.path.join(CARPETA, "nba.json")
+    usar_liga(args.liga)
+    ruta_nba = os.path.join(CARPETA, LIGA["archivo"])
     if not os.path.exists(ruta_nba):
-        sys.exit("Falta nba.json: ejecuta antes actualizar_nba.py.")
+        sys.exit(f"Falta {LIGA['archivo']}: ejecuta antes actualizar_{args.liga}.py.")
     with open(ruta_nba, encoding="utf-8") as fh:
         nba = json.load(fh)
     partidos = nba.get("games") or []
     from bajas import actualizar as actualizar_bajas
-    actualizar_bajas(nba, subir_a_supabase=not args.prueba)
+    actualizar_bajas(nba, subir_a_supabase=not args.prueba, liga=args.liga)
     if not partidos:
         print("Hoy no hay partidos: no se consulta ninguna API.")
         return
-    fecha = partidos[0]["date"]
+    fecha = partidos[0]["date"]   # NFL: toda la jornada se guarda con la fecha de su primer partido
     jug = Jugadores(nba, {t for g in partidos for t in (g["home"], g["away"])})
     usar = (lambda f: args.solo in (None, f))
     claves = {"propline": os.environ.get("PROPLINE_API_KEY"), "oddsapi": os.environ.get("ODDS_API_KEY"),
@@ -550,7 +597,7 @@ def main() -> None:
     if usar("sgo") and claves["sgo"] and faltan:
         sg = SportsGameOdds(claves["sgo"])
         try:
-            nuevas = sg.recoger(faltan, jug, *ventana_utc(fecha))
+            nuevas = sg.recoger(faltan, jug, ventana_utc(fecha)[0], ventana_utc(partidos[-1]["date"])[1])
             juntar(nuevas, "sgo")
             print(f"SportsGameOdds: {resumen(nuevas)} nuevas · {sg.objetos} eventos gastados")
         except Exception as e:
@@ -582,6 +629,8 @@ def main() -> None:
     if not url or not skey:
         sys.exit("Faltan SUPABASE_URL y SUPABASE_SERVICE_KEY en config.env.")
     sb = Supa(url, skey)
+    for f in lista:
+        f["player_id"] = LIGA["prefijo"] + f["player_id"]
     manuales = sb.manuales(fecha)
     if manuales is None:
         print("  Aviso: falta la columna 'fuente' (ejecuta supabase_cuotas.sql); las cuotas a mano se pueden pisar.")
@@ -594,7 +643,7 @@ def main() -> None:
         f["game_date"] = fecha
     sb.subir(lista, con_fuente=manuales is not None)
     sb.guardar_creditos(creditos)
-    print(f"Listo: {len(lista)} cuotas subidas para el {fecha}.")
+    print(f"Listo: {len(lista)} cuotas {args.liga.upper()} subidas para el {fecha}.")
 
 
 if __name__ == "__main__":

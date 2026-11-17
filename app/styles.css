@@ -40,6 +40,8 @@ button{cursor:pointer}
 .top .ttl{font-weight:700;font-size:16px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brand{font-weight:800;font-size:20px;letter-spacing:-.01em;flex:1}
 .brand i{font-style:normal;color:var(--acc)}
+.lg{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:5px;background:var(--surf2);color:var(--mut);margin-right:6px;vertical-align:1px}
+.top .liga{flex:none}.top .liga button{padding:5px 10px;font-size:12.5px}
 .ic{width:38px;height:38px;border-radius:50%;border:1px solid var(--edge);background:var(--glass);display:grid;place-items:center;flex:none;font-size:16px}
 .ic svg{width:18px;height:18px}
 

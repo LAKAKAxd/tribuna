@@ -3,3 +3,4 @@ nba.json
 *.log
 __pycache__/
 pruebas_api/
+nfl.json

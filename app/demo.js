@@ -99,3 +99,77 @@ window.TRIBUNA_DEMO = function () {
   });
   return {data,odds};
 };
+
+/* Demo NFL con el mismo formato que genera actualizar_nfl.py: jugadores y equipos reales, todo lo demás simulado. */
+window.TRIBUNA_DEMO_NFL = function () {
+  function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+  const R = rng(2026);
+  const gauss=()=>{let u=0,v=0;while(!u)u=R();while(!v)v=R();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+  function pois(l){if(l<=0)return 0;const L=Math.exp(-l);let k=0,p=1;do{k++;p*=R()}while(p>L);return k-1}
+  const binom=(n,p)=>{let s=0;for(let i=0;i<n;i++)if(R()<p)s++;return s}, pos0=x=>Math.max(0,Math.round(x));
+  const iso=d=>d.toISOString().slice(0,10);
+  const TEAMS=['ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','DET','GB','HOU','IND','JAX','KC','LV','LAC','LA','MIA','MIN','NE','NO','NYG','NYJ','PHI','PIT','SF','SEA','TB','TEN','WAS'];
+  const STR={KC:6,BUF:6,PHI:5,DET:5,BAL:5,SF:3,CIN:2,LA:2,GB:2,HOU:1,MIN:1,LAC:1,DAL:0,PIT:0,TB:0,SEA:0,DEN:0,WAS:0,ATL:-1,MIA:-1,CHI:-1,ARI:-2,JAX:-2,IND:-2,NO:-3,NYJ:-3,LV:-4,NE:-4,TEN:-5,NYG:-5,CAR:-5,CLE:-6};
+  const TODAY=[{away:'BUF',home:'KC',date:'2026-11-19',status:'8:15 pm ET'},{away:'DAL',home:'PHI',date:'2026-11-22',status:'1:00 pm ET'},
+    {away:'DET',home:'SF',date:'2026-11-22',status:'4:25 pm ET'},{away:'CIN',home:'BAL',date:'2026-11-23',status:'8:15 pm ET'}];
+  const teams={}; TEAMS.forEach(t=>teams[t]=[]);
+  function season(name,start,weeks){
+    for(let w=0;w<weeks;w++){
+      const d=new Date(start+w*7*864e5), order=[...TEAMS].sort(()=>R()-.5);
+      for(let i=0;i<32;i+=2){
+        const h=order[i],a=order[i+1];
+        const ph=pos0(22.5+STR[h]*.9-STR[a]*.6+1+gauss()*9.5),pa=pos0(22.5+STR[a]*.9-STR[h]*.6-1+gauss()*9.5);
+        const hp=ph===pa?ph+3:ph;
+        teams[h].push([iso(d),a,true,hp,pa,name]);teams[a].push([iso(d),h,false,pa,hp,name]);
+      }
+    }
+  }
+  season('2025',Date.UTC(2025,8,7),17);
+  season('2026',Date.UTC(2026,8,13),10);
+  // id, nombre, equipo, posición, nivel (1 = normal)
+  const P=[
+    ['d-mahomes','Patrick Mahomes','KC','QB',1.05],['d-pacheco','Isiah Pacheco','KC','RB',.95],['d-worthy','Xavier Worthy','KC','WR',.95],['d-kelce','Travis Kelce','KC','TE',1.05],
+    ['d-allen','Josh Allen','BUF','QB',1.1],['d-cook','James Cook','BUF','RB',1.05],['d-shakir','Khalil Shakir','BUF','WR',.9],['d-kincaid','Dalton Kincaid','BUF','TE',.9],
+    ['d-hurts','Jalen Hurts','PHI','QB',1],['d-barkley','Saquon Barkley','PHI','RB',1.2],['d-brown','A.J. Brown','PHI','WR',1.1],['d-goedert','Dallas Goedert','PHI','TE',.95],
+    ['d-prescott','Dak Prescott','DAL','QB',1],['d-williams','Javonte Williams','DAL','RB',.9],['d-lamb','CeeDee Lamb','DAL','WR',1.2],['d-ferguson','Jake Ferguson','DAL','TE',.95],
+    ['d-purdy','Brock Purdy','SF','QB',1],['d-mccaffrey','Christian McCaffrey','SF','RB',1.15],['d-jennings','Jauan Jennings','SF','WR',.95],['d-kittle','George Kittle','SF','TE',1.1],
+    ['d-goff','Jared Goff','DET','QB',1.05],['d-gibbs','Jahmyr Gibbs','DET','RB',1.15],['d-stbrown','Amon-Ra St. Brown','DET','WR',1.15],['d-laporta','Sam LaPorta','DET','TE',1],
+    ['d-jackson','Lamar Jackson','BAL','QB',1.1],['d-henry','Derrick Henry','BAL','RB',1.2],['d-flowers','Zay Flowers','BAL','WR',1],['d-andrews','Mark Andrews','BAL','TE',.95],
+    ['d-burrow','Joe Burrow','CIN','QB',1.1],['d-chbrown','Chase Brown','CIN','RB',1],['d-chase','Ja’Marr Chase','CIN','WR',1.25],['d-gesicki','Mike Gesicki','CIN','TE',.85],
+  ];
+  const RUN_QB=new Set(['d-jackson','d-allen','d-hurts']);
+  const cols=["date","opp","home","min","cmp","att","pyd","ptd","int","car","ryd","rtd","tgt","rec","reyd","retd","season"];
+  const players={},logs={};
+  P.forEach(([id,name,team,pos,k])=>{
+    players[id]={name,team,pos,img:''};
+    logs[id]=teams[team].filter(()=>R()>.08).map(g=>{
+      let cmp=0,att=0,pyd=0,ptd=0,int=0,car=0,ryd=0,rtd=0,tgt=0,rec=0,reyd=0,retd=0;
+      if(pos==='QB'){att=pos0(34+gauss()*5);cmp=binom(att,.62+.04*k);pyd=pos0(cmp*(10.5*k+gauss()*1.5));ptd=pois(1.6*k);int=pois(.7/k);car=pois(RUN_QB.has(id)?8:3);ryd=pos0(car*(4.5+gauss()*2));rtd=pois(car>6?.4:.08);}
+      else if(pos==='RB'){car=pos0(15*k+gauss()*4);ryd=pos0(car*(4.4*k+gauss()*1.4));rtd=pois(.55*k);tgt=pois(3.5);rec=binom(tgt,.78);reyd=pos0(rec*(7.5+gauss()*3));retd=pois(.08);}
+      else{const wr=pos==='WR';tgt=pos0((wr?8.5:6)*k+gauss()*2.5);rec=binom(tgt,wr?.64:.7);reyd=pos0(rec*((wr?13:10.5)*k+gauss()*3.5));retd=pois((wr?.5:.35)*k);}
+      return [g[0],g[1],g[2],att+car+tgt,cmp,att,pyd,ptd,int,car,ryd,rtd,tgt,rec,reyd,retd,g[5]];
+    });
+  });
+  const data={liga:'nfl',updated:'2026-11-17T08:00+00:00',seasons:['2025','2026'],cols,games:TODAY.map((g,i)=>({id:'nfl'+i,...g,week:11})),
+    players,logs,team_cols:["date","opp","home","pts","opp_pts","season"],teams};
+  const odds={};
+  const med=a=>{const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
+  const pr=p=>Math.round(100/(p*1.045))/100;
+  const val={pyd:r=>r[6],ptd:r=>r[7],ryd:r=>r[10],rec:r=>r[13],reyd:r=>r[14],rry:r=>r[10]+r[14]};
+  const BY={QB:['pyd','ptd'],RB:['ryd','rry','td'],WR:['reyd','rec','td'],TE:['rec','reyd','td']};
+  P.forEach(([id,,,pos])=>BY[pos].forEach(k=>{
+    if(k==='td'){const p=logs[id].slice(-17).filter(r=>r[11]+r[15]>0).length/17;odds[id+'|td']={line:.5,over:pr(Math.max(.12,Math.min(.75,p+(R()-.5)*.1)))};return;}
+    const v=logs[id].slice(-8).map(val[k]),base=Math.floor(med(v))+.5,sh=k==='ptd'?0:[-1,0,0,1][Math.floor(R()*4)]*(base>30?5:.5);
+    const p=.5+(R()-.5)*.12;odds[id+'|'+k]={line:Math.max(.5,base+sh),over:pr(p),under:pr(1-p)};
+  }));
+  TODAY.forEach(g=>{
+    const ph=Math.min(.85,Math.max(.15,.5+(STR[g.home]-STR[g.away])*.035+.04+(R()-.5)*.08));
+    odds['T:'+g.home+'|ml']={line:0,over:pr(ph)};odds['T:'+g.away+'|ml']={line:0,over:pr(1-ph)};
+    const spread=-Math.round(((STR[g.home]-STR[g.away])*1.2+1.5)*2)/2+.5;
+    odds['T:'+g.home+'|spread']={line:spread,over:pr(.5)};odds['T:'+g.away+'|spread']={line:-spread,over:pr(.5)};
+    const tot=Math.round((45+(R()-.5)*8)*2)/2+.5;
+    odds['G:'+g.away+'@'+g.home+'|total']={line:tot,over:pr(.5),under:pr(.5)};
+    [g.home,g.away].forEach(t=>{const L=tot/2+(t===g.home?-spread/2:spread/2);odds['T:'+t+'|pts']={line:Math.floor(L)+.5,over:pr(.5),under:pr(.5)}});
+  });
+  return {data,odds};
+};

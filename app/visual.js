@@ -18,7 +18,20 @@ window.TRIBUNA_VISUAL = (function () {
     POR: ['#E03A3E', '#1a1a1a', 1610612757], SAC: ['#5A2D81', '#63727A', 1610612758], SAS: ['#3a4246', '#C4CED4', 1610612759],
     TOR: ['#CE1141', '#A1A1A4', 1610612761], UTA: ['#002B5C', '#F9A01B', 1610612762], WAS: ['#002B5C', '#E31837', 1610612764],
   };
-  const col = t => T[t] || ['#3a4558', '#ffb84d', 0];
+  const NFL = window.TRIBUNA_LIGA === 'nfl';
+  // NFL: colores y sigla del logo en ESPN (solo uso privado, igual que los de la NBA)
+  const TN = {
+    ARI: ['#97233F', '#FFB612'], ATL: ['#A71930', '#1a1a1a'], BAL: ['#241773', '#9E7C0C'], BUF: ['#00338D', '#C60C30'],
+    CAR: ['#0085CA', '#101820'], CHI: ['#0B162A', '#C83803'], CIN: ['#FB4F14', '#1a1a1a'], CLE: ['#311D00', '#FF3C00'],
+    DAL: ['#041E42', '#869397'], DEN: ['#FB4F14', '#002244'], DET: ['#0076B6', '#B0B7BC'], GB: ['#203731', '#FFB612'],
+    HOU: ['#03202F', '#A71930'], IND: ['#002C5F', '#A2AAAD'], JAX: ['#006778', '#D7A22A'], KC: ['#E31837', '#FFB81C'],
+    LV: ['#2a2a2a', '#A5ACAF'], LAC: ['#0080C6', '#FFC20E'], LA: ['#003594', '#FFA300'], MIA: ['#008E97', '#FC4C02'],
+    MIN: ['#4F2683', '#FFC62F'], NE: ['#002244', '#C60C30'], NO: ['#2a2a2a', '#D3BC8D'], NYG: ['#0B2265', '#A71930'],
+    NYJ: ['#125740', '#d9d9d9'], PHI: ['#004C54', '#A5ACAF'], PIT: ['#2a2a2a', '#FFB612'], SF: ['#AA0000', '#B3995D'],
+    SEA: ['#002244', '#69BE28'], TB: ['#D50A0A', '#34302B'], TEN: ['#0C2340', '#4B92DB'], WAS: ['#5A1414', '#FFB612'],
+  };
+  const ESPN_NFL = { LA: 'lar', WAS: 'wsh' };
+  const col = t => NFL ? (TN[t] ? [...TN[t], (ESPN_NFL[t] || t).toLowerCase()] : ['#3a4558', '#ffb84d', 0]) : T[t] || ['#3a4558', '#ffb84d', 0];
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   let uid = 0;
 
@@ -28,7 +41,7 @@ window.TRIBUNA_VISUAL = (function () {
     const [c1, c2, id] = col(team), k = 'cr' + (++uid);
     if (CFG.logosOficiales && id) {
       // Dos versiones del logo oficial: «D» para fondo oscuro y «L» para fondo claro; el CSS enseña la que toca.
-      const u = v => `https://cdn.nba.com/logos/nba/${id}/global/${v}/logo.svg`;
+      const u = v => NFL ? `https://a.espncdn.com/i/teamlogos/nfl/${v === 'D' ? '500-dark' : '500'}/${id}.png` : `https://cdn.nba.com/logos/nba/${id}/global/${v}/logo.svg`;
       return `<span class="crest logo ${cls}" style="--s:${size}px;--c1:${c1};--c2:${c2}"><img class="lgD" src="${u('D')}" alt="${esc(team)}" width="${size}" height="${size}" loading="lazy" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${u('L')}'}else{this.parentNode.outerHTML=window.TRIBUNA_VISUAL.crestSvg('${esc(team)}',${size},'${cls}')}"><img class="lgL" src="${u('L')}" alt="" aria-hidden="true" width="${size}" height="${size}" loading="lazy" onerror="this.remove()"></span>`;
     }
     return crestSvg(team, size, cls, k);
@@ -47,8 +60,10 @@ window.TRIBUNA_VISUAL = (function () {
   }
 
   /* Especialidad a partir de sus estadísticas recientes (por 36 minutos). */
-  const SPEC = { tirador: 'Tirador de triples', director: 'Director de juego', pintura: 'Dominio de la pintura', anotador: 'Anotador desde el bote' };
+  const SPEC = NFL ? { QB: 'Lanza el balón', RB: 'Juego de carrera', WR: 'Receptor abierto', TE: 'Bloquea y recibe' }
+    : { tirador: 'Tirador de triples', director: 'Director de juego', pintura: 'Dominio de la pintura', anotador: 'Anotador desde el bote' };
   function specialty(p) {
+    if (NFL) return p.pos;
     const L = p.log.slice(-25); if (!L.length) return 'anotador';
     const m = L.reduce((a, g) => a + g.min, 0) || 1, per = k => L.reduce((a, g) => a + g[k], 0) / m * 36;
     if (CFG.especialidades && CFG.especialidades[p.id]) return CFG.especialidades[p.id];
@@ -102,7 +117,7 @@ window.TRIBUNA_VISUAL = (function () {
     let media;
     if (url && /\.(mp4|webm|mov)(\?|#|$)/i.test(url)) media = `<video class="clip" src="${esc(url)}" autoplay muted loop playsinline aria-hidden="true"></video>`;
     else if (url) media = `<img class="clip" src="${esc(url)}" alt="" aria-hidden="true">`;
-    else media = motif(specialty(p), c1, c2);
+    else media = NFL ? '' : motif(specialty(p), c1, c2);   // las animaciones son de baloncesto
     return `<div class="backdrop" style="--c1:${c1};--c2:${c2}">${media}</div>`;
   }
 
