@@ -475,3 +475,10 @@ table.box th,table.box td{padding:6px 7px}
 .pfilters .chip[aria-pressed="true"]{background:var(--acc-soft);border-color:var(--acc);color:var(--acc)}
 .prow-w{display:flex;align-items:center;border-top:1px solid var(--edge)}.prow-w:first-child{border-top:0}.prow-w .prow{border-top:0;flex:1;min-width:0}
 .fav{border:0;background:none;color:var(--mut);font-size:20px;line-height:1;padding:10px 12px 10px 2px;opacity:.55}.fav[aria-pressed="true"]{color:var(--acc);opacity:1}
+/* Fútbol */
+.compn{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:-4px 0 6px}
+.wp i.x{background:var(--push)}
+.ml2.three{grid-template-columns:1fr 1fr 1fr}.ml2.three .mlb.draw{order:0}.ml2.three .mlb{padding:12px 10px 10px}
+.ml2.three .mlb .odd{font-size:24px}
+.markets.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:420px){.markets.four{grid-template-columns:repeat(2,minmax(0,1fr))}}

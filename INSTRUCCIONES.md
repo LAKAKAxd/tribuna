@@ -46,6 +46,7 @@ Crea una cuenta en [github.com](https://github.com) y un repositorio vacío llam
 | Archivo | Para qué |
 | --- | --- |
 | `actualizar_nba.py` | Descarga de NBA.com las estadísticas de esta temporada y la anterior, los partidos de hoy y las posiciones |
+| `actualizar_futbol.py` | Fútbol de ESPN (gratis, sin clave): Serie A, LaLiga, Premier y Champions, con estadísticas de cada jugador. La primera vez tarda unos 15 minutos |
 | `actualizar_nfl.py` | Lo mismo para la NFL, desde nflverse (GitHub, gratis, sin clave): estadísticas de QB, RB, WR y TE, resultados y partidos de la semana |
 | `ejecutar_actualizacion.bat` | Ejecuta los dos scripts y los sube a Supabase, guardando un registro |
 | `programar_tarea_diaria.bat` | Crea la tarea diaria de Windows |
@@ -120,3 +121,11 @@ Para probar sin subir nada: `py actualizar_cuotas.py --prueba` (o `--solo propli
 2. Supabase > SQL Editor: pega `supabase_avisos.sql` entero y Run (una sola vez). Programa la función cada 2 minutos.
 3. En la app (en iPhone, abierta desde el icono de la pantalla de inicio): Configuración > Avisos > «Activar avisos». En 2 minutos llega un aviso de prueba.
 Avisa de: ticket ganado o perdido, selección cumplida en combinadas y «a X le faltan 2» (10 en yardas). Cada aviso llega una sola vez.
+
+### Fútbol (FC)
+- Arriba, **FC** en el selector. «Próximos partidos» enseña los de los próximos 7 días con filtro por competición.
+- Datos: `actualizar_futbol.py` a las 09:00 (dentro de `ejecutar_actualizacion.bat`). Sin cuotas automáticas: se pueden pegar a mano en Cuotas (`INT ganador 1,80`, `NAP@INT empate 3,40`, `NAP@INT ambos 1,85 1,95`, `NAP@INT total 2,5 1,90 1,90`, `Lautaro gol 0,5 2,40`, `Lautaro tiros 2,5 1,85 1,95`).
+- El modelo acierta el 1X2 mejor que el azar; en más/menos goles y ambos marcan apenas.
+
+### Site URL de Supabase
+Supabase > Authentication > URL Configuration: **Site URL** = `https://lakakaxd.github.io/tribuna/app/` y añade la misma en **Redirect URLs**. Es la dirección a la que llevan los correos de Supabase (cambio de contraseña, invitaciones).

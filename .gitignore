@@ -4,3 +4,5 @@ nba.json
 __pycache__/
 pruebas_api/
 nfl.json
+futbol.json
+futbol_cache.json
