@@ -1094,7 +1094,7 @@ function viewAdmin() {
   const rows = S.draft ? parsePaste(S.draft) : [], ok = rows.filter(r => !r.err);
   return `${topBar('', false)}<div class="stack fade"><div><h1>${NFL ? 'Cuotas de la semana' : 'Cuotas de hoy'}</h1><div class="mut sm">${(() => { const v = Object.values(ODDS), a = v.filter(o => o.src === 'auto').length; return `${v.length} cargadas${a ? ` (${a} automáticas, ${v.length - a} tuyas)` : ''}`; })()} · ${esc(updatedTxt())} · solo tú ves esta pestaña</div></div>
     <button class="btn ghost" data-act="valor">¿Acierta el valor? Ver el registro</button>
-    ${oddsCredits ? `<div class="card pad"><b>Cuotas automáticas</b><div class="note">Se actualizan solas a las 18:00 y a las 21:00 con tres fuentes gratis: PropLine primero, y The Odds API y SportsGameOdds para lo que falte. Las que pegues aquí tienen prioridad y el script no las toca.</div>
+    ${oddsCredits ? `<div class="card pad"><b>Cuotas automáticas</b><div class="note">Se actualizan solas (fútbol 13:30 y 18:00; NBA y NFL 18:00 y 21:00; NFL también el domingo a las 17:45) con fuentes gratis: PropLine primero, y The Odds API y SportsGameOdds para lo que falte. Las que pegues aquí tienen prioridad y el script no las toca.</div>
       <div class="kpis" style="margin-top:10px">${[['PropLine', oddsCredits.propline_restantes, 'consultas hoy', 100], ['The Odds API', oddsCredits.restantes, 'créditos este mes', 60], ['SportsGameOdds', oddsCredits.sgo_eventos, 'eventos usados', null]].map(([n, v, u, low]) => `<div><div class="xs mut">${n}</div><b class="${low != null && v != null && v < low ? 'err' : 'hi'}" style="font-size:18px">${v ?? '–'}</b><div class="xs mut">${u}</div></div>`).join('')}</div></div>` : ''}
     <div class="card pad stack">
       <label for="paste" class="sm" style="font-weight:700">Pega una línea por apuesta</label>
@@ -2105,7 +2105,7 @@ async function bootReal() {
   BETS = (ap.data || []).map(r => r.data); S.calMonth = refDay().slice(0, 7);
   startLive();   // marcador de la pantalla principal y apuestas en juego, cada 30 s
   ODDS = {}; (od.data || []).forEach(r => ODDS[r.player_id.slice(ODDS_PRE.length) + '|' + r.stat] = { line: r.line == null ? null : +r.line, over: r.over_odd == null ? null : +r.over_odd, under: r.under_odd == null ? null : +r.under_odd, src: r.fuente || 'manual', at: r.updated_at });
-  if (isAdmin) { const cr = await sb.from('ajustes').select('valor').eq('clave', NFL ? 'creditos_odds_nfl' : 'creditos_odds').maybeSingle(); try { oddsCredits = cr.data ? JSON.parse(cr.data.valor) : null; } catch (e) { oddsCredits = null; } }
+  if (isAdmin) { const cr = await sb.from('ajustes').select('valor').eq('clave', NFL ? 'creditos_odds_nfl' : SOC ? 'creditos_odds_fut' : 'creditos_odds').maybeSingle(); try { oddsCredits = cr.data ? JSON.parse(cr.data.valor) : null; } catch (e) { oddsCredits = null; } }
   await loadPerfiles();
   render();
   recordValue();   // administrador: guarda lo que dice el modelo antes de los partidos

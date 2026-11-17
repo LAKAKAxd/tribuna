@@ -32,12 +32,12 @@ App web de estadísticas NBA, NFL y fútbol para apuestas, para Fabio (vive en I
 
 ## Publicar
 - GitHub Pages desde `main` de github.com/LAKAKAxd/tribuna → https://lakakaxd.github.io/tribuna/app/ (demo: `?demo`; demo NFL: elegir NFL arriba).
-- **Siempre** que cambies algo de `app/`, sube el número `?v=` de todos los scripts y estilos en `app/index.html` (último: 1794920000). Si no, los navegadores siguen con la versión vieja.
+- **Siempre** que cambies algo de `app/`, sube el número `?v=` de todos los scripts y estilos en `app/index.html` (último: 1794930000). Si no, los navegadores siguen con la versión vieja.
 - Comprueba la sintaxis: `node -e "new Function(require('fs').readFileSync('app/app.js','utf8'))"`. Para ver la app sin Supabase, abre `app/index.html?demo` con un servidor local.
 
 ## Datos y horarios (PC de Fabio, Windows, carpeta C:\Users\fabio\Tribuna)
 - 09:00 tarea «Tribuna NBA» (`ejecutar_actualizacion.bat`): estadísticas NFL (nflverse), fútbol (ESPN) y NBA (NBA.com, solo funciona desde su PC; desde la nube da 403).
-- 18:00 «Tribuna Cuotas 18» (NBA; las cuotas NFL automáticas están en pausa desde el 17/11/2026 hasta tener un plan de créditos, solo se suben las bajas NFL) y 21:00 «Tribuna Cuotas 21» (`--props`, solo NBA): PropLine principal (1.000 consultas/día gratis), The Odds API y SportsGameOdds de respaldo. Cuotas = media del mercado, **sin nombres de casas**. La NFL comparte los 500 créditos/mes de The Odds API.
+- Cuotas (`ejecutar_cuotas.bat`, plan del 17/11/2026, comprobado con las claves reales): 13:30 «Tribuna Cuotas 13» (`futbol`), 18:00 «Tribuna Cuotas 18» (NBA, fútbol y NFL), 21:00 «Tribuna Cuotas 21» (`--props`: props NBA y NFL de esa noche) y domingo 17:45 «Tribuna NFL domingo» (`nfl`, tras los inactivos). NFL y fútbol solo piden los partidos que empiezan en las próximas `--horas` (48; la NFL calcula la hora de «8:15 pm ET»). PropLine principal (1.000 consultas/día; se para si quedan < 100), The Odds API (500 créditos/mes, solo NBA/NFL) y SportsGameOdds de respaldo. Cuotas = media del mercado, **sin nombres de casas**. PropLine llama a la NFL `football_nfl` (con `americanfootball_nfl` nunca llegaban cuotas NFL). Fútbol en PropLine: los eventos traen `espn_event_id` y los jugadores id de ESPN; mercados `h2h` (con empate), `totals`, `both_teams_to_score`, `total_corners`/`team_corners`, `total_cards`/`team_cards`, `total_fouls`, `total_offsides`, `total_shots(_on_target)` (los cuatro últimos existen pero aún no los ofrece ninguna casa), `anytime_goal_scorer`, `goal_or_assist`, `player_assists`, `player_shots_on_target` (las «1+» son `line_type: milestone`). SportsGameOdds gratis solo tiene la Champions de nuestras ligas (periodo `reg` = 90 minutos). Saques de banda y de puerta: ninguna API gratis. Créditos de fútbol en `ajustes` clave `creditos_odds_fut`.
 - Directo, calendario de la semana y bajas: **ESPN** (`site.api.espn.com`, CORS abierto). cdn.nba.com bloquea al navegador. NFL: siglas de nflverse (Rams `LA`, Washington `WAS`; ESPN usa `LAR`/`WSH`).
 - `config.env` (solo en su PC, nunca en el repo ni en el chat): SUPABASE_URL, SUPABASE_SERVICE_KEY, PROPLINE_API_KEY, SGO_API_KEY, ODDS_API_KEY. La anon key pública está en `app/config.js`.
 
@@ -62,4 +62,3 @@ App web de estadísticas NBA, NFL y fútbol para apuestas, para Fabio (vive en I
 ## Pendientes
 - Avisos: función «avisos» desplegada y `supabase_avisos.sql` ejecutado (17/11/2026, logs con 200 cada 2 min). Falta probar la llegada de avisos en un iPhone.
 - `supabase_valor_grupo.sql` ya ejecutado (confirmado 17/11/2026).
-- NFL: probar las cuotas reales (`py actualizar_cuotas.py --liga nfl --prueba`); los nombres de mercado de PropLine/SportsGameOdds para NFL no se han comprobado con una respuesta real.

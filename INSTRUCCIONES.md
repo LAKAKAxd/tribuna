@@ -95,15 +95,16 @@ Cada fuente tiene su papel:
 
 1. Pon las tres claves en `config.env`: `PROPLINE_API_KEY=`, `ODDS_API_KEY=` y `SGO_API_KEY=`. No las compartas ni las subas a GitHub. Si falta una, el script se la salta.
 2. En Supabase > SQL Editor ejecuta `supabase_cuotas.sql` (una sola vez).
-3. Dos tareas de Windows: a las 18:00 `ejecutar_cuotas.bat` y a las 21:00 `ejecutar_cuotas.bat --props`.
+3. Tareas de Windows (ya creadas): 13:30 `ejecutar_cuotas.bat futbol`, 18:00 `ejecutar_cuotas.bat` (NBA, fútbol y NFL), 21:00 `ejecutar_cuotas.bat --props` (props NBA y NFL de esa noche) y domingo 17:45 `ejecutar_cuotas.bat nfl`. El PC tiene que estar encendido a esas horas. Solo se piden los partidos que empiezan en las próximas 48 horas, así que los días sin partidos casi no gastan.
 Lo que pase queda en `cuotas.log`; en la pestaña Cuotas de la app ves lo que queda de cada plan.
-Para probar sin subir nada: `py actualizar_cuotas.py --prueba` (o `--solo propline|oddsapi|sgo` para una sola fuente).
+Para probar sin subir nada: `py actualizar_cuotas.py --prueba` (o `--solo propline|oddsapi|sgo` para una sola fuente; `--liga nfl|futbol`; `--horas 100` para mirar más días).
+Qué trae gratis el fútbol: ganador, empate, goles, ambos marcan, córners, tarjetas, goleador, gol o asistencia, asistencias y tiros a puerta de jugador. Faltas, fueras de juego y tiros del partido existen en PropLine pero aún no los ofrece ninguna casa (si aparecen, entran solos). Saques de banda y de puerta no los da ninguna API gratis: a mano.
 
 ### NFL
 - Arriba, junto a «Tribuna», el selector **NBA | NFL** cambia de liga (se recuerda en cada navegador).
 - El **boleto y las apuestas son los mismos para todas las ligas**: puedes juntar en un ticket selecciones de NBA y de NFL. Cada selección lleva su etiqueta de liga; su directo se ve al elegir su liga arriba, y el ticket se cierra cuando todas sus selecciones tienen resultado.
 - La jornada NFL es la semana entera (jueves a lunes): «Esta semana» enseña todos sus partidos con día y hora de Italia.
-- Datos: `actualizar_nfl.py` a las 09:00 (dentro de `ejecutar_actualizacion.bat`). Cuotas y bajas: `py actualizar_cuotas.py --liga nfl`, que `ejecutar_cuotas.bat` lanza solo a las 18:00. Las cuotas NFL se guardan en la misma tabla con el prefijo `nfl:`.
+- Datos: `actualizar_nfl.py` a las 09:00 (dentro de `ejecutar_actualizacion.bat`). Cuotas y bajas: `py actualizar_cuotas.py --liga nfl`, que `ejecutar_cuotas.bat` lanza a las 18:00 y 21:00 y el domingo a las 17:45 (solo partidos de las próximas horas). Las cuotas NFL se guardan en la misma tabla con el prefijo `nfl:`.
 - No hace falta ejecutar nada nuevo en Supabase.
 - Cuotas a mano: igual que en la NBA, con estas estadísticas: `pyd` (yardas de pase), `ptd`, `cmp`, `att`, `int`, `pry` (pase + carrera), `ryd` (carrera), `car`, `rec`, `reyd` (recepción), `rry` (carrera + recepción), `tgt` y `td` (anota touchdown, línea 0,5). Ejemplo: `Mahomes pyd 265,5 1,87 1,93`.
 
@@ -124,7 +125,7 @@ Avisa de: ticket ganado o perdido, selección cumplida en combinadas y «a X le 
 
 ### Fútbol (FC)
 - Arriba, **FC** en el selector. «Próximos partidos» enseña los de los próximos 7 días con filtro por competición.
-- Datos: `actualizar_futbol.py` a las 09:00 (dentro de `ejecutar_actualizacion.bat`). Sin cuotas automáticas: se pueden pegar a mano en Cuotas (`INT ganador 1,80`, `NAP@INT empate 3,40`, `NAP@INT ambos 1,85 1,95`, `NAP@INT total 2,5 1,90 1,90`, `Lautaro gol 0,5 2,40`, `Lautaro tiros 2,5 1,85 1,95`).
+- Datos: `actualizar_futbol.py` a las 09:00 (dentro de `ejecutar_actualizacion.bat`). Cuotas automáticas a las 13:30 y 18:00 (PropLine; SportsGameOdds de respaldo en la Champions); también se pueden pegar a mano en Cuotas (`INT ganador 1,80`, `NAP@INT empate 3,40`, `NAP@INT ambos 1,85 1,95`, `NAP@INT total 2,5 1,90 1,90`, `Lautaro gol 0,5 2,40`, `Lautaro tiros 2,5 1,85 1,95`).
 - El modelo acierta el 1X2 mejor que el azar; en más/menos goles y ambos marcan apenas.
 - En cada partido: **Estadísticas por partido** (córners, tarjetas, tiros, faltas cometidas y recibidas, fueras de juego, posesión, pases, entradas, paradas y goles en la 1.ª parte; últimos 5, 10 o temporada, en total, en casa o fuera), **Precedentes** (últimos 6 enfrentamientos) y mercados de **córners, tarjetas, tiros, tiros a puerta, faltas y fueras de juego** del partido o de cada equipo, con su historial y el modelo.
 - Cuotas a mano de estos mercados: `NAP@INT corners 9,5 1,85 1,95` (total del partido) o `INT tarjetas 2,5 1,90 1,90` (de un equipo). También `tiros`, `puerta`, `faltas` y `fueras`.
