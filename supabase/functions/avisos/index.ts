@@ -27,6 +27,7 @@ const F = {
     td: g => [g.pts, g.reb, g.ast, g.stl, g.blk].filter(x => x >= 10).length >= 3 ? 1 : 0,
   },
   nfl: { pry: g => g.pyd + g.ryd, rry: g => g.ryd + g.reyd, td: g => g.rtd + g.retd >= 1 ? 1 : 0 },
+  futbol: { gol: g => g.g >= 1 ? 1 : 0, ga: g => g.g + g.a >= 1 ? 1 : 0, asi: g => g.a >= 1 ? 1 : 0, tar: g => g.yc >= 1 ? 1 : 0 },
 };
 const val = (g, k, liga) => (F[liga][k] ? F[liga][k](g) : g[k]) ?? 0;
 
@@ -66,6 +67,16 @@ const boxscore = (liga, id) => once(`box|${liga}|${id}`, async () => {
   if (liga === 'nfl') for (const o of Object.values(out)) for (const k of ['cmp', 'att', 'pyd', 'ptd', 'int', 'car', 'ryd', 'rtd', 'rec', 'reyd', 'retd', 'tgt']) o[k] = o[k] || 0;
   return out;
 });
+/* Fútbol: el id del partido ya es el de ESPN; del resumen salen estado, marcador y jugadores (por id). */
+const soccer = (comp, id) => once(`soc|${comp}|${id}`, async () => {
+  const j = await getJSON(`https://site.api.espn.com/apis/site/v2/sports/soccer/${comp}/summary?event=${id}`);
+  const c = j.header?.competitions?.[0] || {}, side = ha => +((c.competitors || []).find(x => x.homeAway === ha)?.score) || 0, players = {};
+  for (const t of j.rosters || []) for (const p of t.roster || []) {
+    const st = Object.fromEntries((p.stats || []).map(x => [x.name, +x.value || 0]));
+    players[String(p.athlete?.id)] = { played: !!(p.starter || p.subbedIn), g: st.totalGoals || 0, a: st.goalAssists || 0, sh: st.totalShots || 0, sot: st.shotsOnTarget || 0, fc: st.foulsCommitted || 0, yc: st.yellowCards || 0, sv: st.saves || 0 };
+  }
+  return { state: estado(c.status), home: { score: side('home') }, away: { score: side('away') }, players };
+});
 /* Partido de ESPN de una selección (por fecha y equipos). */
 async function eventOf(l) {
   const liga = l.liga || 'nba', evs = await scoreboard(liga, l.date);
@@ -76,11 +87,11 @@ async function eventOf(l) {
 async function legEval(l) {
   if (l.type === 'x' || l.res) return { st: l.res || null, cur: l.final ?? null };
   if (!l.date) return { st: null };
-  const liga = l.liga || 'nba', ev = await eventOf(l);
+  const liga = l.liga || 'nba', ev = liga === 'futbol' ? (l.comp && l.gameId ? await soccer(l.comp, l.gameId) : null) : await eventOf(l);
   if (!ev || ev.state === 'pre') return { st: null };
   const fin = ev.state === 'final';
   if (l.type === 'p') {
-    const box = await boxscore(liga, ev.id), ps = box[nkey(l.name)];
+    const ps = liga === 'futbol' ? (ev.players[String(l.pid)]?.played ? ev.players[String(l.pid)] : null) : (await boxscore(liga, ev.id))[nkey(l.name)];
     if (!ps) return { st: fin ? 'void' : null, live: !fin };
     const cur = val(ps, l.stat, liga), over = cur > l.line;
     return { st: l.side === 'over' ? (over ? 'won' : fin ? 'lost' : null) : (over ? 'lost' : fin ? 'won' : null), cur, live: !fin };
@@ -89,6 +100,8 @@ async function legEval(l) {
   let st = null, cur;
   if (l.market === 'ml') { cur = mine - theirs; if (fin) st = cur > 0 ? 'won' : 'lost'; }
   else if (l.market === 'spread') { cur = mine - theirs; if (fin) st = cur + l.line > 0 ? 'won' : cur + l.line === 0 ? 'void' : 'lost'; }
+  else if (l.market === 'draw') { cur = hs - as; if (fin) st = hs === as ? 'won' : 'lost'; }
+  else if (l.market === 'btts') { const yes = hs > 0 && as > 0; cur = Math.min(hs, as); st = l.side === 'over' ? (yes ? 'won' : fin ? 'lost' : null) : (yes ? 'lost' : fin ? 'won' : null); }
   else { cur = l.market === 'total' ? hs + as : mine; const over = cur > l.line; st = l.side === 'over' ? (over ? 'won' : fin ? 'lost' : null) : (over ? 'lost' : fin ? 'won' : null); }
   return { st, cur, live: !fin };
 }
@@ -121,7 +134,7 @@ async function noticesFor(b, cur, lang) {
     const l = legs[i];
     if (x.st === 'won' && legs.length > 1 && !l.res) out.push({ clave: `ok:${b.id}:${i}`, title: t.leg, body: legText(l, t) });
     if (!x.st && x.live && l.type === 'p' && l.side === 'over' && x.cur != null) {
-      const need = Math.floor(l.line) + 1 - x.cur, near = YARDAS.has(l.stat) ? 10 : 2;
+      const need = Math.floor(l.line) + 1 - x.cur, near = YARDAS.has(l.stat) ? 10 : (l.liga === 'futbol' ? 1 : 2);
       if (need > 0 && need <= near) out.push({ clave: `cerca:${b.id}:${i}`, title: t.near(need), body: legText(l, t) });
     }
   });

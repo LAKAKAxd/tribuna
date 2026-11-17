@@ -173,3 +173,47 @@ window.TRIBUNA_DEMO_NFL = function () {
   });
   return {data,odds};
 };
+
+/* Demo de fútbol con el mismo formato que genera actualizar_futbol.py: equipos y jugadores reales, todo lo demás simulado. */
+window.TRIBUNA_DEMO_FUT = function () {
+  function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+  const R = rng(2030);
+  function pois(l){if(l<=0)return 0;const L=Math.exp(-l);let k=0,p=1;do{k++;p*=R()}while(p>L);return k-1}
+  const iso=d=>d.toISOString().slice(0,10);
+  // siglas, nombre, id de ESPN (para el escudo), colores, competición, fuerza
+  const T=[['INT','Internazionale','110','#0a2d6e','#a29161','ita.1',.45],['MIL','AC Milan','103','#c8102e','#000000','ita.1',.2],['JUV','Juventus','111','#111111','#ffffff','ita.1',.25],['NAP','Napoli','114','#1f6fb2','#ffffff','ita.1',.35],
+    ['RMA','Real Madrid','86','#ffffff','#00529f','esp.1',.55],['BAR','Barcelona','83','#a50044','#004d98','esp.1',.5],['ATM','Atlético Madrid','1068','#cb3524','#272e61','esp.1',.3],['SEV','Sevilla','243','#d71920','#ffffff','esp.1',-.1],
+    ['ARS','Arsenal','359','#ef0107','#ffffff','eng.1',.5],['MNC','Manchester City','382','#6cabdd','#1c2c5b','eng.1',.5],['LIV','Liverpool','364','#c8102e','#00b2a9','eng.1',.45],['CHE','Chelsea','363','#034694','#ffffff','eng.1',.25]];
+  const comps={'ita.1':'Serie A','esp.1':'LaLiga','eng.1':'Premier','uefa.champions':'Champions'}, S={}; T.forEach(t=>S[t[0]]=t[6]);
+  const teams_meta=Object.fromEntries(T.map(t=>[t[0],{id:t[2],name:t[1],short:t[1],color:t[3],alt:t[4]}]));
+  const teams={}; T.forEach(t=>teams[t[0]]=[]);
+  function season(name,start,rounds){ for(let r=0;r<rounds;r++){ const d=new Date(start+r*7*864e5);
+    for(const comp of ['ita.1','esp.1','eng.1']){ const ts=T.filter(t=>t[5]===comp).map(t=>t[0]).sort(()=>R()-.5);
+      for(let i=0;i<4;i+=2){ const h=ts[i],a=ts[i+1],gh=pois(Math.exp(.25+S[h]-S[a]*.8+.12)),ga=pois(Math.exp(.25+S[a]-S[h]*.8-.12));
+        teams[h].push([iso(d),a,true,gh,ga,name,comp]);teams[a].push([iso(d),h,false,ga,gh,name,comp]); } } } }
+  season('2025',Date.UTC(2025,7,17),36); season('2026',Date.UTC(2026,7,16),13);
+  const TODAY=[{home:'INT',away:'NAP',comp:'ita.1',h:20,m:45,day:1},{home:'RMA',away:'ATM',comp:'esp.1',h:21,m:0,day:2},{home:'LIV',away:'ARS',comp:'eng.1',h:17,m:30,day:2},{home:'BAR',away:'MNC',comp:'uefa.champions',h:21,m:0,day:4}];
+  // id, nombre, equipo, posición, goles/90, asist/90, tiros/90, a puerta/90, faltas/90, amarillas/90, paradas/90
+  const P=[['155153','Lautaro Martínez','INT','F',.62,.12,3.1,1.5,1.2,.18,0],['207219','Nicolò Barella','INT','M',.12,.22,1.4,.4,1.6,.28,0],['199015','Yann Sommer','INT','G',0,0,0,0,.1,.03,2.6],
+    ['244489','Romelu Lukaku','NAP','F',.5,.12,2.6,1.2,1.3,.15,0],['281048','Scott McTominay','NAP','M',.33,.08,2.2,.9,1.4,.25,0],['168987','Alex Meret','NAP','G',0,0,0,0,.05,.02,2.8],
+    ['231388','Kylian Mbappé','RMA','F',.9,.2,4.5,2.2,.6,.12,0],['244482','Vinícius Júnior','RMA','F',.5,.3,3.3,1.4,.9,.3,0],['179434','Thibaut Courtois','RMA','G',0,0,0,0,.05,.03,2.9],
+    ['141024','Antoine Griezmann','ATM','F',.42,.25,2.3,1,.8,.15,0],['234215','Julián Álvarez','ATM','F',.55,.15,3,1.3,.9,.12,0],['134925','Jan Oblak','ATM','G',0,0,0,0,.05,.02,3.1],
+    ['256896','Mohamed Salah','LIV','F',.7,.4,3.6,1.6,.4,.06,0],['224431','Virgil van Dijk','LIV','D',.08,.03,.9,.4,.6,.12,0],['191451','Alisson','LIV','G',0,0,0,0,.05,.03,2.7],
+    ['265226','Bukayo Saka','ARS','F',.45,.35,2.9,1.2,.9,.12,0],['251856','Martin Ødegaard','ARS','M',.22,.3,2.1,.7,.9,.15,0],['226592','David Raya','ARS','G',0,0,0,0,.05,.03,2.6],
+    ['230366','Lamine Yamal','BAR','F',.4,.4,3.2,1.2,.7,.1,0],['153066','Robert Lewandowski','BAR','F',.75,.12,3.4,1.6,.9,.12,0],['232111','Pedri','BAR','M',.12,.25,1.6,.5,1,.18,0],
+    ['250924','Erling Haaland','MNC','F',.95,.12,4,2.1,.6,.1,0],['232233','Phil Foden','MNC','M',.32,.25,2.4,1,.6,.12,0],['176521','Bernardo Silva','MNC','M',.15,.22,1.5,.6,1.1,.2,0]];
+  const cols=["date","opp","home","min","g","a","sh","sot","fc","yc","rc","sv","season","comp"], players={}, logs={};
+  P.forEach(([id,name,team,pos,g,a,sh,sot,fc,yc,sv])=>{ players[id]={name,team,pos};
+    logs[id]=teams[team].filter(()=>R()>.1).map(x=>{ const m=R()<.15?Math.round(20+R()*40):90, f=m/90, o=pois(sh*f), on=Math.min(o,pois(sot*f));
+      return [x[0],x[1],x[2],m,Math.min(on,pois(g*f)),pois(a*f),o,on,pois(fc*f),Math.min(1,pois(yc*f)),0,pois(sv*f),x[5],x[6]]; }); });
+  const now=Date.UTC(2026,10,17), games=TODAY.map((g,i)=>{ const st=new Date(now+g.day*864e5+(g.h-1)*36e5+g.m*6e4); return { id:'fut'+i, comp:g.comp, start:st.toISOString(), date:iso(st), home:g.home, away:g.away, status:'' }; });
+  const data={liga:'futbol',updated:'2026-11-17T08:00+00:00',seasons:['2025','2026'],comps,cols,games,players,logs,team_cols:["date","opp","home","pts","opp_pts","season","comp"],teams,teams_meta};
+  const pr=p=>Math.round(100/(p*1.05))/100, odds={};
+  games.forEach(g=>{ const d=S[g.home]-S[g.away]+.15, ph=Math.min(.8,Math.max(.12,.45+d*.35)), pd=.26, pa=Math.max(.08,1-ph-pd);
+    odds['T:'+g.home+'|ml']={line:0,over:pr(ph)}; odds['T:'+g.away+'|ml']={line:0,over:pr(pa)}; odds['G:'+g.away+'@'+g.home+'|draw']={line:.5,over:pr(pd)};
+    odds['G:'+g.away+'@'+g.home+'|total']={line:2.5,over:pr(.52),under:pr(.48)}; odds['G:'+g.away+'@'+g.home+'|btts']={line:.5,over:pr(.55),under:pr(.45)}; });
+  P.forEach(([id,,team,pos])=>{ if(!games.some(g=>g.home===team||g.away===team))return;
+    if(pos==='G'){odds[id+'|sv']={line:2.5,over:pr(.5),under:pr(.5)};return;}
+    odds[id+'|gol']={line:.5,over:pr(Math.min(.6,.15+R()*.4))}; odds[id+'|sh']={line:pos==='F'?2.5:1.5,over:pr(.5),under:pr(.5)}; odds[id+'|sot']={line:.5,over:pr(.55),under:pr(.45)}; });
+  return {data,odds};
+};

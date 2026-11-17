@@ -110,11 +110,9 @@ def con_reintentos(fn, intentos=4, espera=5):
 
 
 def descargar(hoy_us: datetime) -> dict:
-    from nba_api.stats.endpoints import leaguegamelog, playerindex, scoreboardv2
-    from nba_api.stats.static import teams as static_teams
+    from nba_api.stats.endpoints import leaguegamelog, playerindex, scoreboardv3
 
     actual, anterior = temporadas(hoy_us)
-    abbr = {t["id"]: t["abbreviation"] for t in static_teams.get_teams()}
 
     logs: dict[str, list] = {}
     jugadores: dict[str, dict] = {}
@@ -149,16 +147,16 @@ def descargar(hoy_us: datetime) -> dict:
         print(f"  Sin posiciones ({e}); se usará 'F' por defecto.", file=sys.stderr)
 
     print("Descargando partidos de hoy…")
-    sb = con_reintentos(lambda: scoreboardv2.ScoreboardV2(
-        game_date=hoy_us.strftime("%Y-%m-%d"), timeout=60).get_normalized_dict())
-    # GameHeader a veces repite el mismo partido: nos quedamos con uno por GAME_ID.
-    partidos = list({g["GAME_ID"]: {
-        "id": g["GAME_ID"],
-        "home": abbr.get(g["HOME_TEAM_ID"], str(g["HOME_TEAM_ID"])),
-        "away": abbr.get(g["VISITOR_TEAM_ID"], str(g["VISITOR_TEAM_ID"])),
-        "status": g.get("GAME_STATUS_TEXT", "").strip(),   # p. ej. "7:30 pm ET"
+    # ScoreboardV3 (V2 está obsoleto). Se deja un partido por gameId por si viniera repetido.
+    sb = con_reintentos(lambda: scoreboardv3.ScoreboardV3(
+        game_date=hoy_us.strftime("%Y-%m-%d"), timeout=60).get_dict())
+    partidos = list({g["gameId"]: {
+        "id": g["gameId"],
+        "home": g["homeTeam"]["teamTricode"],
+        "away": g["awayTeam"]["teamTricode"],
+        "status": (g.get("gameStatusText") or "").strip(),   # p. ej. "7:30 pm ET"
         "date": hoy_us.strftime("%Y-%m-%d"),
-    } for g in sb.get("GameHeader", [])}.values())
+    } for g in (sb.get("scoreboard") or {}).get("games", [])}.values())
 
     return construir(jugadores, logs, partidos, actual, anterior, equipos)
 
