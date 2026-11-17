@@ -445,9 +445,9 @@ function viewHoy() {
     ${D.games.length ? D.games.map(g => {
       const t = etToRome(g.date, g.status), md = model(g), mlH = ODDS['T:' + g.home + '|ml'], mlA = ODDS['T:' + g.away + '|ml'];
       return `<button class="card game" data-game="${esc(g.id)}">
-        <div class="teams"><div class="tm">${V.crest(g.away, 34, 'sm')}<b>${g.away}</b><span>${record(g.away, D.cur)}${mlA ? ' · ' + dec(mlA.over, 2) : ''}</span></div>
+        <div class="teams"><div class="tm">${V.crest(g.away, 68, 'sm')}<b>${g.away}</b><span>${record(g.away, D.cur)}${mlA ? ' · ' + dec(mlA.over, 2) : ''}</span></div>
         <div class="mid"><b>${esc(t.time)}</b>${g.status && !t.day ? '' : ''}</div>
-        <div class="tm">${V.crest(g.home, 34, 'sm')}<b>${g.home}</b><span>${record(g.home, D.cur)}${mlH ? ' · ' + dec(mlH.over, 2) : ''}</span></div></div>
+        <div class="tm">${V.crest(g.home, 68, 'sm')}<b>${g.home}</b><span>${record(g.home, D.cur)}${mlH ? ' · ' + dec(mlH.over, 2) : ''}</span></div></div>
         <div class="wp"><i class="a" style="width:${(1 - md.pHome) * 100}%"></i><i class="h" style="width:${md.pHome * 100}%"></i></div>
         <div class="wp-l"><span>${pct(1 - md.pHome)}</span><span>Modelo · total ${dec(md.total, 0)}</span><span>${pct(md.pHome)}</span></div>
       </button>`;
@@ -463,9 +463,9 @@ function viewGame() {
   return `${topBar(g.away + ' @ ' + g.home, true)}<div class="stack fade">
     <div class="card pad matchup" style="--ca:${V.colors(g.away)[0]};--ch:${V.colors(g.home)[0]}">
       <div class="teams" style="position:relative;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;text-align:center">
-        <div class="tm">${V.crest(g.away, 72, ANIM ? 'in' : '')}<b>${g.away}</b><span>${record(g.away, D.cur)} · fuera ${record(g.away, D.cur, 'away')}</span></div>
+        <div class="tm">${V.crest(g.away, 104, ANIM ? 'in' : '')}<b>${g.away}</b><span>${record(g.away, D.cur)} · fuera ${record(g.away, D.cur, 'away')}</span></div>
         <div class="mid vs-glow"><b>${esc(t.time)}</b>${esc(t.day)}</div>
-        <div class="tm">${V.crest(g.home, 72, ANIM ? 'in b' : '')}<b>${g.home}</b><span>${record(g.home, D.cur)} · casa ${record(g.home, D.cur, 'home')}</span></div></div>
+        <div class="tm">${V.crest(g.home, 104, ANIM ? 'in b' : '')}<b>${g.home}</b><span>${record(g.home, D.cur)} · casa ${record(g.home, D.cur, 'home')}</span></div></div>
     </div>
     <div class="sectabs" role="tablist" aria-label="Apartado">${tabs.map(([v, l]) => `<button role="tab" data-gtab="${v}" aria-selected="${S.gtab === v}">${esc(l)}</button>`).join('')}</div>
     ${S.gtab === 'game' ? gameSection(g, md) : teamSection(g, S.gtab === 'home' ? g.home : g.away)}
@@ -602,10 +602,11 @@ function teamSection(g, tm) {
     <div class="floatbar" role="group" aria-label="Ordenar por">${PER.map(([w, l]) => `<button data-twin="${w}" aria-pressed="${S.twin === w}">${l}</button>`).join('')}</div>
   </section>`;
 }
-function avatar(p) {
+/* Foto del jugador (NBA.com, solo uso privado: fotosOficiales en config.js) o sus iniciales, con el logo de su equipo en la esquina. */
+function avatar(p, size = 42) {
   const [c1, c2] = V.colors(p.team);
   const img = CFG.fotosOficiales ? `<img src="https://cdn.nba.com/headshots/nba/latest/260x190/${p.id}.png" alt="" loading="lazy" onerror="this.remove()">` : '';
-  return `<span class="pav" style="--c1:${c1};--c2:${c2}">${initials(p.name)}${img}</span>`;
+  return `<span class="pavw" style="--ps:${size}px"><span class="pav" style="--c1:${c1};--c2:${c2}">${initials(p.name)}${img}</span>${CFG.fotosOficiales ? `<span class="pbadge">${V.crest(p.team, Math.round(size * .38), 'sm')}</span>` : ''}</span>`;
 }
 
 /* ---------- vista: jugador ---------- */
@@ -621,7 +622,7 @@ function viewPlayer() {
   const items = games.map(x => ({ v: val(x, k), d1: fdate(x.d), d2: (x.home ? '' : '@') + x.opp, title: `${fdate(x.d)} ${x.home ? 'vs' : '@'} ${x.opp}: ${val(x, k)} en ${x.min} min` }));
   return `${topBar(p.name, true)}<div class="stack fade">
     <div class="card hero" style="--c2:${V.colors(p.team)[1]}">${V.playerBackdrop(p, FONDOS[p.id])}
-      <div class="who"><div class="av team">${V.crest(p.team, 50, ANIM ? 'in' : '')}</div><div style="min-width:0"><div class="n">${esc(p.name)}</div><div class="mut sm">${p.team} · ${{ G: 'Base/escolta', F: 'Alero', C: 'Pívot' }[p.pos]}${g ? ` · ${g.home === p.team ? 'vs' : '@'} ${opp} · ${esc(t.time)}` : ''}</div><div class="spec"><i></i>${V.SPEC[V.specialty(p)] || ''}</div>${bajaOf(p.id) ? `<div class="sm" style="margin-top:6px"><span class="pill ${bajaOf(p.id).status === 'out' ? 'bad' : 'acc'}">${BAJA_N[bajaOf(p.id).status]}</span> <span class="mut xs">${esc(bajaOf(p.id).note || '')}</span></div>` : ''}</div><div class="grade" title="Nota del duelo: % de L10 y defensa del rival">${gradeL}</div></div>
+      <div class="who"><div class="av team">${CFG.fotosOficiales ? avatar(p, 72) : V.crest(p.team, 50, ANIM ? 'in' : '')}</div><div style="min-width:0"><div class="n">${esc(p.name)}</div><div class="mut sm">${p.team} · ${{ G: 'Base/escolta', F: 'Alero', C: 'Pívot' }[p.pos]}${g ? ` · ${g.home === p.team ? 'vs' : '@'} ${opp} · ${esc(t.time)}` : ''}</div><div class="spec"><i></i>${V.SPEC[V.specialty(p)] || ''}</div>${bajaOf(p.id) ? `<div class="sm" style="margin-top:6px"><span class="pill ${bajaOf(p.id).status === 'out' ? 'bad' : 'acc'}">${BAJA_N[bajaOf(p.id).status]}</span> <span class="mut xs">${esc(bajaOf(p.id).note || '')}</span></div>` : ''}</div><div class="grade" title="Nota del duelo: % de L10 y defensa del rival">${gradeL}</div></div>
       ${isAdmin ? `<details class="fondo"><summary>Fondo animado</summary><div class="ctl" style="margin-top:8px"><input id="fondo" class="field" type="url" placeholder="Enlace a un GIF o MP4" value="${esc(FONDOS[p.id] || '')}" aria-label="Enlace del fondo"><button class="btn ghost" data-act="save-fondo">Guardar</button></div><div class="note">Vacío = animación propia según su especialidad.</div></details>` : ''}
     </div>
     <div class="chips" role="tablist" aria-label="Estadística">${STATS.map(s => `<button class="chip" role="tab" data-stat="${s.k}" aria-selected="${s.k === k}" title="${s.n}">${s.l}</button>`).join('')}</div>
@@ -695,7 +696,7 @@ function viewProps() {
       ${S.listTab === 'players' ? `<div class="seg" role="group" aria-label="Tramo">${[['l5', 'L5'], ['l10', 'L10'], ['l20', 'L20'], ['cur', D.cur.slice(2)]].map(([v, l]) => `<button data-lwin="${v}" aria-pressed="${S.listWin === v}">${l}</button>`).join('')}</div>` : '<span class="note">Valor frente al modelo</span>'}</div>
     ${S.listTab === 'players' ? `<div class="chips">${statChips.map(s => `<button class="chip acc" data-lstat="${s}" aria-pressed="${S.listStat === s}">${s === 'all' ? 'Todas' : SK[s].l}</button>`).join('')}</div>` : ''}
     <div class="card">${rows.length ? rows.map(r => r.type === 'p' ? `<button class="prow pl" data-open-p="${r.p.id}" data-open-k="${r.k}">
-        ${V.crest(r.p.team, 30, 'sm')}
+        ${CFG.fotosOficiales ? avatar(r.p, 44) : V.crest(r.p.team, 30, 'sm')}
         <div style="min-width:0"><div class="nm">${esc(r.p.name)}</div><div class="mut xs"><span class="sd ${r.b.side}">${r.b.side === 'over' ? 'Más' : 'Menos'}</span> ${dec(r.line)} ${SK[r.k].l}${r.b.eo.v ? ' · ' + dec(r.b.eo.v, 2) : ''}</div></div>
         <div class="sp">${spark(r.spark, r.line, r.b.side)}<div class="xs mut">${(() => { const v = r.spark, ok = v.filter(x => r.b.side === 'under' ? x < r.line : x > r.line).length; return `${ok}/${v.length} últimos`; })()}</div></div>
         <div class="rt"><div class="pc ${r.b.p >= .6 ? 'hi' : ''}">${pct(r.b.p)}</div><div class="xs ${r.b.edge >= 3 ? 'ok' : r.b.edge <= -3 ? 'err' : 'mut'}">${r.b.edge != null ? edgeTxt(r.b.edge) + ' valor' : '–'}</div></div>
