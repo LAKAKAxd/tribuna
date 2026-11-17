@@ -27,7 +27,9 @@ window.TRIBUNA_VISUAL = (function () {
   function crest(team, size = 64, cls = '') {
     const [c1, c2, id] = col(team), k = 'cr' + (++uid);
     if (CFG.logosOficiales && id) {
-      return `<span class="crest ${cls}" style="--s:${size}px;--c1:${c1};--c2:${c2}"><img src="https://cdn.nba.com/logos/nba/${id}/global/L/logo.svg" alt="${esc(team)}" width="${size}" height="${size}" onerror="this.parentNode.outerHTML=window.TRIBUNA_VISUAL.crestSvg('${esc(team)}',${size},'${cls}')"></span>`;
+      // Dos versiones del logo oficial: «D» para fondo oscuro y «L» para fondo claro; el CSS enseña la que toca.
+      const u = v => `https://cdn.nba.com/logos/nba/${id}/global/${v}/logo.svg`;
+      return `<span class="crest logo ${cls}" style="--s:${size}px;--c1:${c1};--c2:${c2}"><img class="lgD" src="${u('D')}" alt="${esc(team)}" width="${size}" height="${size}" loading="lazy" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${u('L')}'}else{this.parentNode.outerHTML=window.TRIBUNA_VISUAL.crestSvg('${esc(team)}',${size},'${cls}')}"><img class="lgL" src="${u('L')}" alt="" aria-hidden="true" width="${size}" height="${size}" loading="lazy" onerror="this.remove()"></span>`;
     }
     return crestSvg(team, size, cls, k);
   }

@@ -8,7 +8,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const id = new URL(req.url).searchParams.get("game") ?? "";
   if (!/^\d{10}$/.test(id)) return new Response("id no válido", { status: 400, headers: cors });
-  const r = await fetch(`https://cdn.nba.com/static/json/liveData/boxscore/boxscore_${id}.json`, {
+  // kind=pbp devuelve el jugada a jugada (para la línea por cuartos de cada jugador); por defecto, el marcador.
+  const kind = new URL(req.url).searchParams.get("kind") === "pbp" ? "playbyplay" : "boxscore";
+  const r = await fetch(`https://cdn.nba.com/static/json/liveData/${kind}/${kind}_${id}.json`, {
     headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://www.nba.com/" },
   });
   return new Response(await r.text(), {
