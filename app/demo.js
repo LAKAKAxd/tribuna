@@ -190,7 +190,13 @@ window.TRIBUNA_DEMO_FUT = function () {
   function season(name,start,rounds){ for(let r=0;r<rounds;r++){ const d=new Date(start+r*7*864e5);
     for(const comp of ['ita.1','esp.1','eng.1']){ const ts=T.filter(t=>t[5]===comp).map(t=>t[0]).sort(()=>R()-.5);
       for(let i=0;i<4;i+=2){ const h=ts[i],a=ts[i+1],gh=pois(Math.exp(.25+S[h]-S[a]*.8+.12)),ga=pois(Math.exp(.25+S[a]-S[h]*.8-.12));
-        teams[h].push([iso(d),a,true,gh,ga,name,comp]);teams[a].push([iso(d),h,false,ga,gh,name,comp]); } } } }
+        const sH=est(h,a,gh,true),sA=est(a,h,ga,false),row=(x,y)=>EK.flatMap(k=>[x[k],y[k]]);
+        teams[h].push([iso(d),a,true,gh,ga,name,comp,...row(sH,sA)]);teams[a].push([iso(d),h,false,ga,gh,name,comp,...row(sA,sH)]); } } } }
+  // estadísticas de equipo por partido (mismo orden que EQ_STATS de actualizar_futbol.py)
+  const EK=['sh','sot','cor','fc','yc','rc','off','sv','pos','pas','pp','tk','ht'];
+  function est(t,o,g,home){ const f=S[t]-S[o]+(home?.1:-.1), sh=pois(12+f*8), pos=Math.round(50+f*25);
+    let ht=0; for(let i=0;i<g;i++) if(R()<.45) ht++;
+    return {sh,sot:Math.min(sh,pois(4.2+f*3)),cor:pois(Math.max(1.5,5+f*3)),fc:pois(11.5-f*2),yc:pois(Math.max(.5,2.1-f)),rc:R()<.05?1:0,off:pois(1.8),sv:pois(Math.max(.5,3-f*2)),pos,pas:Math.round(pos*9+R()*60),pp:Math.round(80+f*8),tk:pois(16),ht}; }
   season('2025',Date.UTC(2025,7,17),36); season('2026',Date.UTC(2026,7,16),13);
   const TODAY=[{home:'INT',away:'NAP',comp:'ita.1',h:20,m:45,day:1},{home:'RMA',away:'ATM',comp:'esp.1',h:21,m:0,day:2},{home:'LIV',away:'ARS',comp:'eng.1',h:17,m:30,day:2},{home:'BAR',away:'MNC',comp:'uefa.champions',h:21,m:0,day:4}];
   // id, nombre, equipo, posición, goles/90, asist/90, tiros/90, a puerta/90, faltas/90, amarillas/90, paradas/90
@@ -207,11 +213,12 @@ window.TRIBUNA_DEMO_FUT = function () {
     logs[id]=teams[team].filter(()=>R()>.1).map(x=>{ const m=R()<.15?Math.round(20+R()*40):90, f=m/90, o=pois(sh*f), on=Math.min(o,pois(sot*f));
       return [x[0],x[1],x[2],m,Math.min(on,pois(g*f)),pois(a*f),o,on,pois(fc*f),Math.min(1,pois(yc*f)),0,pois(sv*f),x[5],x[6]]; }); });
   const now=Date.UTC(2026,10,17), games=TODAY.map((g,i)=>{ const st=new Date(now+g.day*864e5+(g.h-1)*36e5+g.m*6e4); return { id:'fut'+i, comp:g.comp, start:st.toISOString(), date:iso(st), home:g.home, away:g.away, status:'' }; });
-  const data={liga:'futbol',updated:'2026-11-17T08:00+00:00',seasons:['2025','2026'],comps,cols,games,players,logs,team_cols:["date","opp","home","pts","opp_pts","season","comp"],teams,teams_meta};
+  const data={liga:'futbol',updated:'2026-11-17T08:00+00:00',seasons:['2025','2026'],comps,cols,games,players,logs,team_cols:["date","opp","home","pts","opp_pts","season","comp",...EK.flatMap(k=>[k,k+'_a'])],teams,teams_meta};
   const pr=p=>Math.round(100/(p*1.05))/100, odds={};
   games.forEach(g=>{ const d=S[g.home]-S[g.away]+.15, ph=Math.min(.8,Math.max(.12,.45+d*.35)), pd=.26, pa=Math.max(.08,1-ph-pd);
     odds['T:'+g.home+'|ml']={line:0,over:pr(ph)}; odds['T:'+g.away+'|ml']={line:0,over:pr(pa)}; odds['G:'+g.away+'@'+g.home+'|draw']={line:.5,over:pr(pd)};
-    odds['G:'+g.away+'@'+g.home+'|total']={line:2.5,over:pr(.52),under:pr(.48)}; odds['G:'+g.away+'@'+g.home+'|btts']={line:.5,over:pr(.55),under:pr(.45)}; });
+    odds['G:'+g.away+'@'+g.home+'|total']={line:2.5,over:pr(.52),under:pr(.48)}; odds['G:'+g.away+'@'+g.home+'|btts']={line:.5,over:pr(.55),under:pr(.45)};
+    odds['G:'+g.away+'@'+g.home+'|s_cor']={line:9.5,over:pr(.5),under:pr(.5)}; odds['G:'+g.away+'@'+g.home+'|s_crd']={line:4.5,over:pr(.48),under:pr(.52)}; odds['T:'+g.home+'|t_sot']={line:4.5,over:pr(.5),under:pr(.5)}; });
   P.forEach(([id,,team,pos])=>{ if(!games.some(g=>g.home===team||g.away===team))return;
     if(pos==='G'){odds[id+'|sv']={line:2.5,over:pr(.5),under:pr(.5)};return;}
     odds[id+'|gol']={line:.5,over:pr(Math.min(.6,.15+R()*.4))}; odds[id+'|sh']={line:pos==='F'?2.5:1.5,over:pr(.5),under:pr(.5)}; odds[id+'|sot']={line:.5,over:pr(.55),under:pr(.45)}; });

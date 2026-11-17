@@ -151,6 +151,14 @@ const ALIAS = SOC ? ALIAS_SOC : NFL ? ALIAS_NFL : { pts: 'pts', puntos: 'pts', p
 const GAME_ALIAS = { empate: 'draw', x: 'draw', ambos: 'btts', btts: 'btts', goles: 'pts', ganador: 'ml', gana: 'ml', ml: 'ml', moneyline: 'ml', '1x2': 'ml', handicap: 'spread', hcp: 'spread', spread: 'spread', hand: 'spread',
   total: 'total', totales: 'total', puntos: 'pts', pts: 'pts', 'puntos-equipo': 'pts' };
 const MARKET_N = SOC ? { ml: 'Ganador', draw: 'Empate', total: 'Total de goles', btts: 'Ambos marcan', pts: 'Goles del equipo' } : { ml: 'Ganador', spread: 'Hándicap', total: 'Total del partido', pts: 'Puntos del equipo' };
+/* Fútbol: mercados de estadísticas de equipo. 's_x' = total del partido, 't_x' = de un equipo (crd = amarillas + rojas). */
+const SOC_ST = { cor: 'córners', crd: 'tarjetas', sh: 'tiros', sot: 'tiros a puerta', fc: 'faltas', off: 'fueras de juego' };
+const STM = m => SOC && /^[st]_/.test(m || '') ? m.slice(2) : null;
+const TWO = m => ['total', 'pts', 'btts'].includes(m) || !!STM(m);   // mercados con «más» y «menos»
+const cap = t => t[0].toUpperCase() + t.slice(1);
+if (SOC) for (const [k, n] of Object.entries(SOC_ST)) { MARKET_N['s_' + k] = cap(n) + ' del partido'; MARKET_N['t_' + k] = cap(n) + ' del equipo'; }
+if (SOC) Object.assign(GAME_ALIAS, { corners: 'x_cor', corner: 'x_cor', tarjetas: 'x_crd', cards: 'x_crd', tiros: 'x_sh', remates: 'x_sh', shots: 'x_sh', puerta: 'x_sot', 'a-puerta': 'x_sot',
+  faltas: 'x_fc', fouls: 'x_fc', fueras: 'x_off', 'fuera-de-juego': 'x_off', offside: 'x_off' });
 
 /* ---------- estado ---------- */
 const V = window.TRIBUNA_VISUAL;
@@ -160,7 +168,7 @@ let BETS = [];
 let BAJAS = {}, BAJAS_AT = null;   // id NBA -> { status: 'out'|'doubtful'|'questionable'|'probable', note, name, team }
 let D = null, ODDS = {}, sb = null, isAdmin = DEMO, userEmail = '', userId = DEMO ? 'demo-yo' : '';
 const S = { view: 'hoy', back: [], gameId: null, pid: null, stat: LG.statDef, win: 'l10', venue: 'all', minMin: 0, rest: 'all',
-  market: 'ml', mTeam: 'home', gwin: 'l10', gtab: 'game', gvenue: 'all', tstat: LG.teamStat, twin: 'l10', range: 'month', calMonth: '', calDay: null, stake: '', betOdd: '', listTab: 'players', listStat: 'all', listWin: 'l10', draft: '', saving: false, msg: '' };
+  market: 'ml', mTeam: 'home', gwin: 'l10', sstat: 'cor', swin: 'l10', svenue: 'all', gtab: 'game', gvenue: 'all', tstat: LG.teamStat, twin: 'l10', range: 'month', calMonth: '', calDay: null, stake: '', betOdd: '', listTab: 'players', listStat: 'all', listWin: 'l10', draft: '', saving: false, msg: '' };
 let FAVS = store.get('favs', []);   // props favoritas (jugador|estadística o mercado de partido)
 let slip = store.get('slip', []), uLines = store.get('lines', {}), uOdds = store.get('uodds', {}), sides = store.get('sides', {});
 const saveUser = () => { store.set('slip', slip); store.set('lines', uLines); store.set('uodds', uOdds); store.set('sides', sides); };
@@ -183,7 +191,9 @@ function prepare(raw) {
   }
   const teams = {};
   for (const [t, arr] of Object.entries(raw.teams || {})) {
-    teams[t] = arr.map(r => { const g = obj(r, tcols); g.d = new Date(g.date + 'T00:00:00Z'); g.margin = g.pts - g.opp_pts; g.total = g.pts + g.opp_pts; return g; });
+    teams[t] = arr.map(r => { const g = obj(r, tcols); g.d = new Date(g.date + 'T00:00:00Z'); g.margin = g.pts - g.opp_pts; g.total = g.pts + g.opp_pts;
+      if (g.yc != null) { g.crd = g.yc + (g.rc || 0); g.crd_a = g.yc_a + (g.rc_a || 0); }
+      return g; });
   }
   const [prev, cur] = raw.seasons;
   const seen = new Set(), games = (raw.games || []).filter(g => { const k = g.id || g.away + '@' + g.home; return seen.has(k) ? false : (seen.add(k), true); });
@@ -303,30 +313,37 @@ function record(t, season, venue = 'all') { const g = tGames(t, venue).filter(x 
    Tiene en cuenta contra quién se jugó cada partido. La temporada anterior pesa 0,3 y la actual 1;
    la media de puntos de la temporada actual tiene su propio ajuste (este año se anota más). */
 /* NFL (calibrado el 17-nov-2026 con 1.100 partidos de 2022-2025): misma ridge; la temporada anterior pesa 0,2. */
+/* Estadísticas de equipo de fútbol (calibrado el 17-nov-2026 con 1.099 partidos desde enero de 2026, ajustando cada semana solo con lo anterior).
+   lam = ridge, prevW = peso de la temporada anterior, r = dispersión de la binomial negativa (10000 = Poisson).
+   Brier en líneas habituales, modelo frente a la frecuencia histórica (más bajo, mejor): córners 9,5 0,247/0,250 (el más flojo),
+   tarjetas 4,5 0,229/0,235, tiros 24,5 0,225/0,245, a puerta 8,5 0,240/0,249, faltas 23,5 0,228/0,251, fueras 3,5 0,226/0,246.
+   Por equipo mejora algo más (córners 4,5: 0,236/0,250; tiros 12,5: 0,205/0,250). */
+const ST_CAL = { cor: { lam: 10, prevW: .6, r: 20 }, crd: { lam: 20, prevW: 1, r: 1e4 }, sh: { lam: 2, prevW: .3, r: 20 }, sot: { lam: 5, prevW: 1, r: 50 }, fc: { lam: 10, prevW: .3, r: 1e4 }, off: { lam: 10, prevW: .3, r: 10 } };
 const RIDGE = SOC ? { lam: 3, prevW: .7, curMuPen: 3 } : NFL ? { lam: 5, prevW: .2, curMuPen: 3 } : { lam: 5, prevW: .3, curMuPen: 3 };
-function ratings() {
-  if (D.ratings) return D.ratings;
+function ratings(k = 'pts') {
+  const RC = D.rt || (D.rt = {}); if (RC[k]) return RC[k];
+  const P = k === 'pts' ? RIDGE : { ...RIDGE, ...ST_CAL[k] }, yh = k === 'pts' ? 'pts' : k, ya = k === 'pts' ? 'opp_pts' : k + '_a';
   const T = Object.keys(D.teams).sort(), n = T.length, ix = Object.fromEntries(T.map((t, i) => [t, i])), N = 2 * n + 3;
   const A = Array.from({ length: N }, () => new Float64Array(N)), b = new Float64Array(N);
   const AB = absenceSums();
   const add = (cols, y, w) => { for (const i of cols) { b[i] += w * y; for (const j of cols) A[i][j] += w; } };
   for (const [t, arr] of Object.entries(D.teams)) for (const x of arr) {
-    if (!x.home || ix[x.opp] == null) continue;
-    const w = x.season === D.cur ? 1 : RIDGE.prevW, cur = x.season === D.cur ? [2 * n + 2] : [];
+    if (!x.home || ix[x.opp] == null || x[yh] == null) continue;
+    const w = x.season === D.cur ? 1 : P.prevW, cur = x.season === D.cur ? [2 * n + 2] : [];
     // Fuerza "con todos": se suma lo que valían los titulares que faltaron ese día (y se resta al rival).
-    const dm = IMPACT.coef / 2 * ((AB[t]?.[x.date] || 0) - (AB[x.opp]?.[x.date] || 0));
-    add([ix[t], n + ix[x.opp], 2 * n, 2 * n + 1, ...cur], x.pts + dm, w);
-    add([ix[x.opp], n + ix[t], 2 * n, ...cur], x.opp_pts - dm, w);
+    const dm = k === 'pts' ? IMPACT.coef / 2 * ((AB[t]?.[x.date] || 0) - (AB[x.opp]?.[x.date] || 0)) : 0;
+    add([ix[t], n + ix[x.opp], 2 * n, 2 * n + 1, ...cur], x[yh] + dm, w);
+    add([ix[x.opp], n + ix[t], 2 * n, ...cur], x[ya] - dm, w);
   }
-  for (let i = 0; i < 2 * n; i++) A[i][i] += RIDGE.lam;
-  A[2 * n][2 * n] += 1e-4; A[2 * n + 1][2 * n + 1] += 1e-4; A[2 * n + 2][2 * n + 2] += RIDGE.curMuPen;
+  for (let i = 0; i < 2 * n; i++) A[i][i] += P.lam;
+  A[2 * n][2 * n] += 1e-4; A[2 * n + 1][2 * n + 1] += 1e-4; A[2 * n + 2][2 * n + 2] += P.curMuPen;
   for (let c = 0; c < N; c++) {               // Gauss-Jordan (matriz simétrica definida positiva)
     let piv = c; for (let r = c + 1; r < N; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
     [A[c], A[piv]] = [A[piv], A[c]]; [b[c], b[piv]] = [b[piv], b[c]];
     for (let r = 0; r < N; r++) { if (r === c || !A[r][c]) continue; const f = A[r][c] / A[c][c]; for (let k = c; k < N; k++) A[r][k] -= f * A[c][k]; b[r] -= f * b[c]; }
   }
   const x = Array.from(b, (v, i) => v / A[i][i]);
-  return (D.ratings = { ix, off: t => x[ix[t]] ?? 0, def: t => x[n + ix[t]] ?? 0, mu: x[2 * n] + x[2 * n + 2], hca: x[2 * n + 1] });
+  return (RC[k] = { ix, off: t => x[ix[t]] ?? 0, def: t => x[n + ix[t]] ?? 0, mu: x[2 * n] + x[2 * n + 2], hca: x[2 * n + 1] });
 }
 /* ---------- bajas ----------
    Calibrado el 16-nov-2026 con los partidos ya jugados: por cada punto de "Game Score" por encima de un suplente
@@ -423,6 +440,17 @@ function socModel(g) {
   const sum = pHome + pDraw + pAway;
   return { eh, ea, m: eh - ea, total: eh + ea, pHome: pHome / sum, pDraw: pDraw / sum, pAway: pAway / sum, tot, ph, pa, pBtts: (1 - ph[0]) * (1 - pa[0]), lh: 0, la: 0 };
 }
+/* Estadísticas de equipo (córners, tarjetas, tiros, a puerta, faltas, fueras de juego): la misma ridge, con la media de cada
+   equipo, y una binomial negativa de tamaño r (más dispersa que Poisson). Calibrado: ver ST_CAL. */
+const nbDist = (mu, r) => { const p = [Math.pow(r / (r + mu), r)]; for (let x = 1, N = Math.ceil(mu * 3 + 25); x < N; x++) p[x] = p[x - 1] * (x - 1 + r) / x * mu / (r + mu); return p; };
+function statModel(g, k) {
+  const M = D.stm || (D.stm = {}), key = gameKey(g) + '|' + k; if (M[key]) return M[key];
+  const R = ratings(k), r = ST_CAL[k].r;
+  const mh = Math.max(.2, R.mu + R.hca + R.off(g.home) + R.def(g.away)), ma = Math.max(.2, R.mu + R.off(g.away) + R.def(g.home));
+  const ph = nbDist(mh, r), pa = nbDist(ma, r), tot = Array(ph.length + pa.length - 1).fill(0);
+  ph.forEach((x, i) => pa.forEach((y, j) => { tot[i + j] += x * y; }));
+  return (M[key] = { mh, ma, ph, pa, tot });
+}
 const overP = (dist, line) => dist.reduce((a, q, i) => a + (i > line ? q : 0), 0);
 function model(g) {
   if (SOC) return socModel(g);
@@ -438,7 +466,7 @@ const SD = NFL ? { ml: 14, spread: 13, total: 13.5, pts: 9.5 } : { ml: 12, sprea
    la probabilidad del modelo con la de la cuota. Así no salen ventajas grandes falsas. */
 const MKT_W = .5;
 const edgeOf = (p, imp) => imp == null || p == null ? null : (1 - MKT_W) * (p - imp) * 100;
-const GAME_MK = new Set(['total', 'draw', 'btts']);   // mercados del partido entero (no de un equipo)
+const GAME_MK = new Set(['total', 'draw', 'btts', ...Object.keys(SOC_ST).map(k => 's_' + k)]);   // mercados del partido entero (no de un equipo)
 function marketKey(g, market, team) { return GAME_MK.has(market) ? 'G:' + gameKey(g) + '|' + market : 'T:' + team + '|' + market; }
 function marketLine(g, market, team) {
   const key = marketKey(g, market, team);
@@ -447,6 +475,7 @@ function marketLine(g, market, team) {
   const md = model(g), isHome = team === g.home;
   if (market === 'spread') { const other = ODDS[marketKey(g, 'spread', isHome ? g.away : g.home)]; if (other) return -other.line; return Math.round(-(isHome ? md.m : -md.m) * 2) / 2 + .5 * Math.sign(isHome ? md.m : -md.m || 1); }
   if (market === 'draw' || market === 'btts') return .5;
+  if (STM(market)) { const s = statModel(g, STM(market)); return Math.floor(market[0] === 's' ? s.mh + s.ma : isHome ? s.mh : s.ma) + .5; }
   if (market === 'total') return Math.floor(md.total) + .5;
   if (market === 'pts') return Math.floor(isHome ? md.eh : md.ea) + .5;
   return 0;
@@ -454,16 +483,17 @@ function marketLine(g, market, team) {
 function marketEval(g, market, team, side, line) {
   const md = model(g), isHome = team === g.home, mT = isHome ? md.m : -md.m;
   let pModel;
-  const twoSided = ['total', 'pts', 'btts'].includes(market);
-  if (SOC) pModel = market === 'ml' ? (isHome ? md.pHome : md.pAway) : market === 'draw' ? md.pDraw : market === 'btts' ? md.pBtts : market === 'total' ? overP(md.tot, line) : overP(isHome ? md.ph : md.pa, line);
+  const twoSided = TWO(market), sm = STM(market), sMd = sm && statModel(g, sm);
+  if (sm) pModel = overP(market[0] === 's' ? sMd.tot : isHome ? sMd.ph : sMd.pa, line);
+  else if (SOC) pModel = market === 'ml' ? (isHome ? md.pHome : md.pAway) : market === 'draw' ? md.pDraw : market === 'btts' ? md.pBtts : market === 'total' ? overP(md.tot, line) : overP(isHome ? md.ph : md.pa, line);
   else if (market === 'ml') pModel = Phi(mT / SD.ml);
   else if (market === 'spread') pModel = Phi((mT + line) / SD.spread);
   else if (market === 'total') pModel = 1 - Phi((line - md.total) / SD.total);
   else pModel = 1 - Phi((line - (isHome ? md.eh : md.ea)) / SD.pts);
   if (twoSided) pModel = side === 'over' ? pModel : 1 - pModel;
   // Historial: «draw» = |diferencia| por debajo de 0,5; «btts» = goles del que menos marcó por encima de 0,5.
-  const histVal = x => market === 'ml' ? x.margin : market === 'spread' ? x.margin + line : market === 'total' ? x.total : market === 'draw' ? (x.margin === 0 ? 1 : 0) : market === 'btts' ? Math.min(x.pts, x.opp_pts) : x.pts;
-  const thr = market === 'total' || market === 'pts' || market === 'btts' ? line : market === 'draw' ? .5 : 0;
+  const histVal = x => sm ? (market[0] === 's' ? (x[sm] == null ? null : x[sm] + x[sm + '_a']) : x[sm]) : market === 'ml' ? x.margin : market === 'spread' ? x.margin + line : market === 'total' ? x.total : market === 'draw' ? (x.margin === 0 ? 1 : 0) : market === 'btts' ? Math.min(x.pts, x.opp_pts) : x.pts;
+  const thr = market === 'total' || market === 'pts' || market === 'btts' || sm ? line : market === 'draw' ? .5 : 0;
   const tg = GAME_MK.has(market) ? (market === 'total' ? null : g.home) : team;
   const hist = n => {
     let L;
@@ -471,6 +501,7 @@ function marketEval(g, market, team, side, line) {
     else L = n === 'h2h' ? tGames(tg).filter(x => x.opp === (isHome ? g.away : g.home)) : n === 'cur' ? tGames(tg).filter(x => x.season === D.cur) : tGames(tg).slice(-n);
     if (n === 'h2h' && GAME_MK.has(market)) L = tGames(g.home).filter(x => x.opp === g.away);
     if (n === 'cur' && GAME_MK.has(market)) L = [...tGames(g.home), ...tGames(g.away)].filter(x => x.season === D.cur);
+    if (sm) L = L.filter(x => histVal(x) != null);   // partidos sin estadísticas (otras ligas)
     const o = L.filter(x => histVal(x) > thr).length; const p = L.length ? o / L.length : null;
     return { o, n: L.length, p: twoSided && side === 'under' && p != null ? 1 - p : p };
   };
@@ -484,11 +515,12 @@ function marketEval(g, market, team, side, line) {
     else if (market === 'spread') imp = 1 / eo.v;
     else imp = impliedProb(key, odSide, eo);
   }
-  return { pModel, hist, key, eo, imp, edge: edgeOf(pModel, imp), histVal, thr };
+  return { pModel, hist, key, eo, imp, edge: edgeOf(pModel, imp), histVal, thr, sMd };
 }
 function marketLabel(g, market, team, side, line) {
   if (market === 'ml') return `Gana ${team}`;
   if (market === 'draw') return 'Empate';
+  if (STM(market)) return `${market[0] === 't' ? team + ' ' + (side === 'over' ? 'más' : 'menos') : side === 'over' ? 'Más' : 'Menos'} de ${dec(line)} ${SOC_ST[STM(market)]}`;
   if (market === 'btts') return side === 'over' ? 'Ambos marcan' : 'No marcan los dos';
   if (market === 'spread') return `${team} ${signed(line)}`;
   if (market === 'total') return `${side === 'over' ? 'Más' : 'Menos'} de ${dec(line)} ${SOC ? 'goles' : 'puntos'}`;
@@ -762,18 +794,51 @@ function gameSection(g, md) {
     <div class="markets ${SOC ? 'four' : 'three'}">${other.map(m => { const tmm = GAME_MK.has(m) ? null : tm, L = marketLine(g, m, tmm), o = ODDS[marketKey(g, m, tmm)];
       return `<button class="mk" data-market="${m}" aria-pressed="${S.market === m}"><small>${MARKET_N[m]}${tmm ? ' · ' + tmm : ''}</small><b>${m === 'spread' ? signed(L) : m === 'draw' || m === 'btts' ? pct(marketEval(g, m, tmm, 'over', L).pModel) : dec(L)}</b>${o?.over ? `<small>${dec(o.over, 2)}</small>` : ''}</button>`; }).join('')}</div>
     ${other.includes(S.market) ? marketCard(g) : ''}
+    ${SOC ? statsSection(g) : ''}
   </section>`;
 }
+/* Fútbol: media por partido de cada equipo (todos, en casa o fuera), precedentes y mercados de córners, tarjetas, tiros...
+   ESPN no da saques de banda, de puerta ni tiros libres: las faltas recibidas son la mejor aproximación a los tiros libres. */
+const SOC_CMP = [['pts', 'Goles'], ['opp_pts', 'Goles encajados'], ['ht', 'Goles en la 1.ª parte'], ['sh', 'Tiros'], ['sot', 'Tiros a puerta'], ['sh_a', 'Tiros del rival'],
+  ['cor', 'Córners'], ['cor_a', 'Córners del rival'], ['fc', 'Faltas cometidas'], ['fc_a', 'Faltas recibidas'], ['yc', 'Amarillas'], ['rc', 'Rojas'], ['off', 'Fueras de juego'],
+  ['pos', 'Posesión %'], ['pas', 'Pases'], ['pp', '% de pases buenos'], ['tk', 'Entradas'], ['sv', 'Paradas']];
+function statsSection(g) {
+  const W = [['l5', 'L5', 5], ['l10', 'L10', 10], ['cur', D.cur.slice(2), 'cur']], nW = W.find(w => w[0] === S.swin)?.[2] ?? 10;
+  const pick = t => { const L = tGames(t, S.svenue).filter(x => x.sh != null); return nW === 'cur' ? L.filter(x => x.season === D.cur) : L.slice(-nW); };
+  const A = pick(g.home), B = pick(g.away), avg = (L, k) => { const v = L.map(x => x[k]).filter(x => x != null); return v.length ? mean(v) : null; };
+  const rows = SOC_CMP.map(([k, l]) => { const a = avg(A, k), b = avg(B, k), f = a != null && b != null && a + b > 0 ? a / (a + b) : .5, d = k === 'rc' ? 2 : ['pos', 'pas', 'pp'].includes(k) ? 0 : 1;
+    return `<div class="cmp-r"><b class="${a > b ? 'hi' : ''}">${a == null ? '–' : dec(a, d)}</b><div class="cmp-m"><div class="xs mut">${l}</div><div class="cmp-bar"><i style="width:${f * 100}%"></i></div></div><b class="${b > a ? 'hi' : ''}">${b == null ? '–' : dec(b, d)}</b></div>`; }).join('');
+  const h2h = tGames(g.home).filter(x => x.opp === g.away).slice(-6).reverse(), hw = h2h.filter(x => x.margin > 0).length, he = h2h.filter(x => x.margin === 0).length;
+  const k = S.sstat, cur = STM(S.market), team = S.mTeam === 'home' ? g.home : g.away;
+  const mks = [['s_' + k, null], ['t_' + k, g.home], ['t_' + k, g.away]].map(([m, tm]) => { const L = marketLine(g, m, tm), o = ODDS[marketKey(g, m, tm)], s = statModel(g, k);
+    const on = S.market === m && (!tm || tm === team);
+    return `<button class="mk" data-smk="${m}|${tm ? (tm === g.home ? 'home' : 'away') : ''}" aria-pressed="${on}"><small>${tm || 'Partido'}</small><b>${dec(L)}</b><small>${o?.over ? dec(o.over, 2) : 'media ' + dec(tm ? (tm === g.home ? s.mh : s.ma) : s.mh + s.ma, 1)}</small></button>`; }).join('');
+  return `<div class="sec-h"><h3>Estadísticas por partido</h3><span class="note">Media de cada equipo</span></div>
+    <div class="card pad">
+      <div class="pick" style="padding:0 0 10px"><div class="seg" role="group" aria-label="Tramo">${W.map(([w, l]) => `<button data-swin="${w}" aria-pressed="${S.swin === w}">${l}</button>`).join('')}</div>
+        <div class="seg" role="group" aria-label="Lugar">${[['all', 'Todos'], ['home', 'Casa'], ['away', 'Fuera']].map(([v, l]) => `<button data-svenue="${v}" aria-pressed="${S.svenue === v}">${l}</button>`).join('')}</div></div>
+      <div class="cmp-h"><span>${V.crest(g.home, 22, 'sm')} ${g.home} <span class="xs mut">(${A.length})</span></span><span><span class="xs mut">(${B.length})</span> ${g.away} ${V.crest(g.away, 22, 'sm')}</span></div>
+      ${rows}
+      <p class="note" style="margin:8px 0 0">Faltas recibidas ≈ tiros libres a favor. Saques de banda y de puerta no salen en los datos gratis de ESPN.</p></div>
+    <div class="card pad"><div class="row-between"><h3>Precedentes</h3><span class="note">${h2h.length ? `${g.home} ${hw}-${he}-${h2h.length - hw - he}` : ''}</span></div>
+      ${h2h.length ? `<ul class="h2h">${h2h.map(x => { const H = x.home ? g.home : g.away, Aw = x.home ? g.away : g.home, hs = x.home ? x.pts : x.opp_pts, as = x.home ? x.opp_pts : x.pts;
+        return `<li><span class="xs mut">${fdate(x.d)} · ${esc(compName(x) || x.comp)}</span><span class="h2h-s">${H} <b>${hs} - ${as}</b> ${Aw}</span>${x.cor != null ? `<span class="xs mut">${x.cor + x.cor_a} córners · ${x.crd + x.crd_a} tarjetas · ${x.sh + x.sh_a} tiros</span>` : ''}</li>`; }).join('')}</ul>` : '<div class="mut sm">No se han enfrentado en las dos últimas temporadas</div>'}</div>
+    <div class="sec-h"><h3>Córners, tarjetas, tiros…</h3></div>
+    <div class="chips">${Object.entries(SOC_ST).map(([x, nm]) => `<button class="chip acc" data-sstat="${x}" aria-pressed="${k === x}">${cap(nm)}</button>`).join('')}</div>
+    <div class="markets three">${mks}</div>
+    ${cur ? marketCard(g) : ''}`;
+}
 function marketCard(g) {
-  const team = GAME_MK.has(S.market) ? null : (S.mTeam === 'home' ? g.home : g.away), two = ['total', 'pts', 'btts'].includes(S.market);
+  const team = GAME_MK.has(S.market) ? null : (S.mTeam === 'home' ? g.home : g.away), two = TWO(S.market), sm = STM(S.market), sv = x => S.market[0] === 's' ? (x[sm] == null ? null : x[sm] + x[sm + '_a']) : x[sm];
   const side = two ? getSide(marketKey(g, S.market, team)) : 'over';
   const line = marketLine(g, S.market, team), ev = marketEval(g, S.market, team, side, line);
   const W = [['l5', 'L5', 5], ['l10', 'L10', 10], ['l20', 'L20', 20], ['h2h', 'H2H', 'h2h'], ['cur', D.cur.slice(2), 'cur']];
   const nSel = W.find(w => w[0] === S.gwin)?.[2] ?? 10;
   const src = GAME_MK.has(S.market) ? g.home : team, opp = src === g.home ? g.away : g.home;
-  const series = nSel === 'h2h' ? tGames(src).filter(x => x.opp === opp) : nSel === 'cur' ? tGames(src).filter(x => x.season === D.cur) : tGames(src).slice(-nSel);
+  const base = sm ? tGames(src).filter(x => sv(x) != null) : tGames(src);
+  const series = nSel === 'h2h' ? base.filter(x => x.opp === opp) : nSel === 'cur' ? base.filter(x => x.season === D.cur) : base.slice(-nSel);
   // Empate: |diferencia| (se cumple si queda por debajo de 0,5); ambos marcan: goles del que menos marcó.
-  const items = series.slice(-25).map(x => ({ v: S.market === 'spread' ? x.margin : S.market === 'total' ? x.total : S.market === 'draw' ? Math.abs(x.margin) : S.market === 'btts' ? Math.min(x.pts, x.opp_pts) : x.pts, d1: fdate(x.d), d2: (x.home ? '' : '@') + x.opp, title: `${fdate(x.d)} ${x.home ? 'vs' : '@'} ${x.opp}: ${x.pts}-${x.opp_pts}` }));
+  const items = series.slice(-25).map(x => ({ v: sm ? sv(x) : S.market === 'spread' ? x.margin : S.market === 'total' ? x.total : S.market === 'draw' ? Math.abs(x.margin) : S.market === 'btts' ? Math.min(x.pts, x.opp_pts) : x.pts, d1: fdate(x.d), d2: (x.home ? '' : '@') + x.opp, title: `${fdate(x.d)} ${x.home ? 'vs' : '@'} ${x.opp}: ${x.pts}-${x.opp_pts}` }));
   items.forEach(i => { if (S.market === 'spread') i.lab = (i.v > 0 ? '+' : '') + i.v; }); withMissed(items, series.slice(-25), src);
   const cLine = S.market === 'spread' ? -line : line, h = ev.hist(nSel);
   return `<div class="card">
@@ -787,7 +852,7 @@ function marketCard(g) {
         ${ev.eo.src === 'tuya' ? `<button class="linkb" data-act="reset-godd">Usar la cuota de hoy</button>` : ''}${uLines[ev.key] != null ? `<button class="linkb" data-act="reset-gline">Línea de hoy</button>` : ''}
         <button class="btn ghost" data-act="add-game" style="margin-left:auto">+ Combinada</button></div>
       <div class="chartbox">${chart(items, cLine, { min: S.market === 'spread' || SOC ? 0 : 'auto', side: S.market === 'spread' ? 'over' : S.market === 'draw' ? 'under' : side, label: MARKET_N[S.market], lineLab: S.market === 'spread' ? signed(-line) : dec(line) })}</div>
-      <div class="pad" style="padding-top:0"><div class="note">${S.market === 'spread' ? `Diferencia de puntos de ${team}. Cubre el ${signed(line)} si la barra supera ${signed(-line)}.` : S.market === 'draw' ? `Diferencia de goles en los partidos de ${g.home} (0 = empate).` : S.market === 'btts' ? `Goles del equipo que menos marcó en los partidos de ${g.home} (1 o más = marcaron los dos).` : S.market === 'total' ? (SOC ? 'Goles totales en los partidos de ' : 'Puntos totales en los partidos de ') + g.home + '.' : (SOC ? 'Goles de ' : 'Puntos de ') + team + ' en cada partido.'}</div>${missedNote(series, src)}</div>
+      <div class="pad" style="padding-top:0"><div class="note">${sm ? (S.market[0] === 's' ? `${cap(SOC_ST[sm])} de los dos equipos en los partidos de ${g.home}. El modelo espera ${dec(ev.sMd.mh + ev.sMd.ma, 1)}.` : `${cap(SOC_ST[sm])} de ${team} en cada partido. El modelo espera ${dec(team === g.home ? ev.sMd.mh : ev.sMd.ma, 1)}.`) : S.market === 'spread' ? `Diferencia de puntos de ${team}. Cubre el ${signed(line)} si la barra supera ${signed(-line)}.` : S.market === 'draw' ? `Diferencia de goles en los partidos de ${g.home} (0 = empate).` : S.market === 'btts' ? `Goles del equipo que menos marcó en los partidos de ${g.home} (1 o más = marcaron los dos).` : S.market === 'total' ? (SOC ? 'Goles totales en los partidos de ' : 'Puntos totales en los partidos de ') + g.home + '.' : (SOC ? 'Goles de ' : 'Puntos de ') + team + ' en cada partido.'}</div>${missedNote(series, src)}</div>
     </div>`;
 }
 
@@ -912,11 +977,11 @@ function propRows(tab, stat, win) {
       rows.push({ type: 'p', p, k, line, h, b, spark: g.slice(-10).map(x => val(x, k)) });
     }
   } else {
-    const MK = SOC ? [['ml', 'TEAMS'], ['draw', [null]], ['total', [null]], ['btts', [null]], ['pts', 'TEAMS']] : [['ml', 'TEAMS'], ['spread', 'TEAMS'], ['total', [null]], ['pts', 'TEAMS']];
+    const MK = SOC ? [['ml', 'TEAMS'], ['draw', [null]], ['total', [null]], ['btts', [null]], ['pts', 'TEAMS'], ...Object.keys(SOC_ST).flatMap(k => [['s_' + k, [null]], ['t_' + k, 'TEAMS']])] : [['ml', 'TEAMS'], ['spread', 'TEAMS'], ['total', [null]], ['pts', 'TEAMS']];
     for (const g of D.games) for (const [m, tms0] of MK) for (const tm of tms0 === 'TEAMS' ? [g.away, g.home] : tms0) {
       const key = marketKey(g, m, tm); if (!ODDS[key]) continue;
       const line = marketLine(g, m, tm);
-      const sidesToTry = ['total', 'pts', 'btts'].includes(m) ? ['over', 'under'] : ['over'];
+      const sidesToTry = TWO(m) ? ['over', 'under'] : ['over'];
       let best = null;
       for (const sd of sidesToTry) { const ev = marketEval(g, m, tm, sd, line); if (!best || (ev.edge ?? -999) > (best.ev.edge ?? -999)) best = { sd, ev }; }
       rows.push({ type: 'g', g, m, tm, line, side: best.sd, ev: best.ev });
@@ -995,6 +1060,13 @@ function parsePaste(text) {
     const first = (tk[0] || '').toUpperCase();
     if (first.includes('@') || (teams.has(first) && tk.length === 2 && GAME_ALIAS[norm(tk[1])])) {
       const kind = GAME_ALIAS[norm(tk[1])]; if (!kind) return bad('Mercado no reconocido: usa ganador, handicap, total o puntos');
+      if (kind.startsWith('x_')) {
+        const st = kind.slice(2), g = first.includes('@') ? D.games.find(x => gameKey(x) === first) : null;
+        if (first.includes('@') && !g) return bad('Ese partido no se juega hoy'); if (!g && !playingTeam(first)) return bad(first + ' no juega hoy');
+        if (!(nums[0] > 0)) return bad('Falta la línea'); if (!okOdd(nums[1]) || !okOdd(nums[2])) return bad('Cuota no válida');
+        return g ? { raw, entity: 'G:' + gameKey(g), stat: 's_' + st, line: nums[0], over: nums[1] ?? null, under: nums[2] ?? null, label: `${g.away} @ ${g.home} · ${SOC_ST[st]} ${dec(nums[0])}` }
+          : { raw, entity: 'T:' + first, stat: 't_' + st, line: nums[0], over: nums[1] ?? null, under: nums[2] ?? null, label: `${first} · ${SOC_ST[st]} ${dec(nums[0])}` };
+      }
       if (kind === 'draw' || kind === 'btts') {
         const g = first.includes('@') ? D.games.find(x => gameKey(x) === first) : gameOfTeam(first);
         if (!g) return bad('Ese partido no se juega hoy'); if (!(nums[0] > 1)) return bad('Falta la cuota'); if (!okOdd(nums[1])) return bad('Cuota no válida');
@@ -1027,7 +1099,7 @@ function viewAdmin() {
     <div class="card pad stack">
       <label for="paste" class="sm" style="font-weight:700">Pega una línea por apuesta</label>
       <textarea id="paste" spellcheck="false" placeholder="${NFL ? 'Mahomes pyd 265,5 1,87 1,93&#10;Kelce rec 5,5 1,90 1,90&#10;Hurts td 0,5 2,10&#10;KC ganador 1,45&#10;KC handicap -6,5 1,90&#10;BUF@KC total 47,5 1,90 1,90&#10;KC puntos 26,5 1,88 1,92' : 'Curry 3PM 4,5 1,85 1,95&#10;Jokic PRA 52,5 1,90 1,90&#10;OKC ganador 1,55&#10;OKC handicap -4,5 1,90&#10;DEN@OKC total 229,5 1,90 1,90&#10;OKC puntos 117,5 1,88 1,92'}">${esc(S.draft)}</textarea>
-      <div class="note">Jugador: <b>nombre estadística línea cuota-más cuota-menos</b>. Partido: <b>EQUIPO ganador cuota</b>, <b>EQUIPO handicap línea cuota</b>, <b>EQUIPO puntos línea más menos</b>, <b>VIS@LOC total línea más menos</b>. Las cuotas son opcionales salvo en ganador. Sirven comas o puntos, espacios, punto y coma o tabuladores.${NFL ? ' Estadísticas NFL: pyd (yardas de pase), ptd, cmp, att, int, pry (pase + carrera), ryd (carrera), car, rec, reyd (recepción), rry (carrera + recepción), tgt y td (anota touchdown, línea 0,5).' : ''}</div>
+      <div class="note">Jugador: <b>nombre estadística línea cuota-más cuota-menos</b>. Partido: <b>EQUIPO ganador cuota</b>, <b>EQUIPO handicap línea cuota</b>, <b>EQUIPO puntos línea más menos</b>, <b>VIS@LOC total línea más menos</b>. Las cuotas son opcionales salvo en ganador. Sirven comas o puntos, espacios, punto y coma o tabuladores.${NFL ? ' Estadísticas NFL: pyd (yardas de pase), ptd, cmp, att, int, pry (pase + carrera), ryd (carrera), car, rec, reyd (recepción), rry (carrera + recepción), tgt y td (anota touchdown, línea 0,5).' : SOC ? ' Fútbol: VIS@LOC empate cuota, VIS@LOC ambos sí no; córners, tarjetas, tiros, puerta, faltas o fueras con VIS@LOC (del partido) o EQUIPO (de un equipo), línea, más y menos.' : ''}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="save-odds" ${ok.length && !S.saving ? '' : 'disabled'}>${S.saving ? 'Guardando…' : `Guardar ${ok.length} para todos`}</button>
         ${DEMO ? '<button class="btn ghost" data-act="example">Ejemplo</button>' : ''}
         ${Object.keys(ODDS).length ? '<button class="linkb" data-act="clear-odds">Borrar todas las de hoy</button>' : ''}</div>
@@ -1097,6 +1169,16 @@ function legState(l, betDate) {
     const over = cur > l.line;
     const st = l.side === 'over' ? (over ? 'won' : fin ? 'lost' : null) : (over ? 'lost' : fin ? 'won' : null);
     return { st, cur, target: l.line, txt };
+  }
+  // estadísticas de equipo (fútbol): en directo del resumen de ESPN; si no, del partido ya guardado
+  const sm = STM(l.market);
+  if (sm) {
+    let H = null, A = null, fin = false, txt = '';
+    if (lv && lv.state !== 'pre' && lv.home.st) { H = lv.home.st; A = lv.away.st; fin = lv.state === 'final'; txt = lv.text; }
+    else { const r = (D.teams[l.home] || []).find(x => x.date === (l.date || betDate) && x.opp === l.away); if (r && r[sm] != null) { H = { [sm]: r[sm] }; A = { [sm]: r[sm + '_a'] }; fin = true; txt = 'Final'; } }
+    if (!H) return { st: null, cur: null, target: l.line, txt: lv?.text || '' };
+    const cur = l.market[0] === 's' ? H[sm] + A[sm] : (l.team === l.home ? H : A)[sm], over = cur > l.line;
+    return { st: l.side === 'over' ? (over ? 'won' : fin ? 'lost' : null) : (over ? 'lost' : fin ? 'won' : null), cur, target: l.line, txt };
   }
   // mercados de partido
   let hs = null, as = null, fin = false, txt = '';
@@ -1281,6 +1363,11 @@ function simulateSoc() {
       for (const { p, r } of ps) { const s = lv.players[p.id]; s.min = Math.min(minute, 90);
         for (const k of SOC_KEYS) { const n = poi(r[k] * 2); s[k] += n; if (k === 'sot') s.sot = Math.min(s.sot, s.sh); if (k === 'g' && n) { const side = p.team === g.home ? 'home' : 'away'; lv[side].score += n; while (lv[side].periods.length <= half) lv[side].periods.push(0); lv[side].periods[half] += n; } } }
       for (const side of ['home', 'away']) while (lv[side].periods.length <= half) lv[side].periods.push(0);
+      for (const side of ['home', 'away']) {   // estadísticas de equipo: suma de los jugadores; córners y fueras de juego al azar
+        const st = lv[side].st || (lv[side].st = { cor: 0, off: 0 }), P = Object.values(lv.players).filter(x => x.tm === lv[side].tri);
+        for (const k of ['sh', 'sot', 'fc', 'yc', 'rc', 'sv']) st[k] = P.reduce((a, x) => a + (x[k] || 0), 0);
+        st.crd = st.yc + st.rc; st.cor += poi(.11); st.off += poi(.04);
+      }
       lv.t = minute; snapshot(g.id);
       lv.state = minute >= 90 ? 'final' : 'live';
       lv.q = minute >= 90 ? '' : minute === 46 ? 'Descanso' : half ? '2.ª parte' : '1.ª parte'; lv.cl = minute >= 90 ? '' : minute + "'";
@@ -1392,7 +1479,7 @@ function demoHistory(seed = 77) {
     if (fw && mf) {
       const leg = (p, stat, line) => ({ type: 'p', liga: 'futbol', pid: p.id, name: p.name, team: p.team, stat, line, side: 'over', gameId: g.id, date: g.date, comp: g.comp, label: `${p.name} · más de ${dec(line)} ${SK[stat].l}` });
       out.push({ id: 'fut-live1', seed: true, date: g.date, created: new Date().toISOString(), stake: 10, odd: 2.4, legs: [leg(fw, 'gol', .5)] });
-      out.push({ id: 'fut-live2', seed: true, date: g.date, created: new Date().toISOString(), stake: 5, odd: 3.6, legs: [leg(mf, 'sh', 1.5), { type: 'g', liga: 'futbol', gameId: g.id, market: 'btts', team: null, side: 'over', line: .5, home: g.home, away: g.away, date: g.date, comp: g.comp, label: 'Ambos marcan' }] });
+      out.push({ id: 'fut-live2', seed: true, date: g.date, created: new Date().toISOString(), stake: 5, odd: 3.6, legs: [leg(mf, 'sh', 1.5), { type: 'g', liga: 'futbol', gameId: g.id, market: 'btts', team: null, side: 'over', line: .5, home: g.home, away: g.away, date: g.date, comp: g.comp, label: 'Ambos marcan' }, { type: 'g', liga: 'futbol', gameId: g.id, market: 's_cor', team: null, side: 'over', line: 8.5, home: g.home, away: g.away, date: g.date, comp: g.comp, label: 'Más de 8,5 córners' }] });
     }
     return out;
   }
@@ -1819,14 +1906,18 @@ app.addEventListener('click', async e => {
   if (d.side) { sides[lineKey(S.pid, S.stat)] = d.side; saveUser(); return render(); }
   if (d.step) { const p = D.players[S.pid]; uLines[lineKey(p.id, S.stat)] = Math.max(0, getLine(p, S.stat) + num(d.step)); saveUser(); return render(); }
   if (d.market) { S.market = S.market === d.market ? 'ml' : d.market; return render(); }
+  if (d.smk) { const [m, t] = d.smk.split('|'); if (S.market === m && (!t || S.mTeam === t)) S.market = 'ml'; else { S.market = m; if (t) S.mTeam = t; } return render(); }
+  if (d.sstat) { S.sstat = d.sstat; if (STM(S.market)) S.market = S.market.slice(0, 2) + d.sstat; return render(); }
+  if (d.swin) { S.swin = d.swin; return render(); }
+  if (d.svenue) { S.svenue = d.svenue; return render(); }
   if (d.gtab) { S.gtab = d.gtab; return render(); }
   if (d.gvenue) { S.gvenue = d.gvenue; return render(); }
   if (d.tstat) { S.tstat = d.tstat; return render(); }
   if (d.twin) { S.twin = d.twin; return render(); }
   if (d.mteam) { S.mTeam = d.mteam; return render(); }
   if (d.gwin) { S.gwin = d.gwin; return render(); }
-  if (d.gside) { const g = findGame(S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away); sides[marketKey(g, S.market, tm)] = d.gside; saveUser(); return render(); }
-  if (d.gstep) { const g = findGame(S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm); uLines[key] = marketLine(g, S.market, tm) + num(d.gstep); saveUser(); return render(); }
+  if (d.gside) { const g = findGame(S.gameId), tm = GAME_MK.has(S.market) ? null : (S.mTeam === 'home' ? g.home : g.away); sides[marketKey(g, S.market, tm)] = d.gside; saveUser(); return render(); }
+  if (d.gstep) { const g = findGame(S.gameId), tm = GAME_MK.has(S.market) ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm); uLines[key] = marketLine(g, S.market, tm) + num(d.gstep); saveUser(); return render(); }
   if (d.ltab) { S.listTab = d.ltab; return render(); }
   if (d.lwin) { S.listWin = d.lwin; return render(); }
   if (d.lstat) { S.listStat = d.lstat; return render(); }
@@ -1850,12 +1941,12 @@ app.addEventListener('click', async e => {
   if (act === 'mode') { mode = mode === 'auto' ? 'light' : mode === 'light' ? 'dark' : 'auto'; store.set('mode', mode); applyMode(); return render(); }
   if (act === 'reset-line') { delete uLines[lineKey(S.pid, S.stat)]; saveUser(); return render(); }
   if (act === 'reset-odd') { const key = lineKey(S.pid, S.stat); delete uOdds[key + '|' + getSide(key)]; saveUser(); return render(); }
-  if (act === 'reset-gline' || act === 'reset-godd') { const g = findGame(S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm);
+  if (act === 'reset-gline' || act === 'reset-godd') { const g = findGame(S.gameId), tm = GAME_MK.has(S.market) ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm);
     if (act === 'reset-gline') delete uLines[key]; else { delete uOdds[key + '|over']; delete uOdds[key + '|under']; } saveUser(); return render(); }
   if (act === 'add-player') { const p = D.players[S.pid], k = S.stat, key = lineKey(p.id, k), line = getLine(p, k), side = getSide(key);
     slip = slip.filter(l => !(l.type === 'p' && l.pid === p.id && l.stat === k)); addLeg({ type: 'p', pid: p.id, stat: k, line, side, odd: effOdd(key, side, line).v }); return render(); }
-  if (act === 'add-game') { const g = findGame(S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm);
-    const side = S.market === 'total' || S.market === 'pts' ? getSide(key) : 'over', line = marketLine(g, S.market, tm), ev = marketEval(g, S.market, tm, side, line);
+  if (act === 'add-game') { const g = findGame(S.gameId), tm = GAME_MK.has(S.market) ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm);
+    const side = TWO(S.market) ? getSide(key) : 'over', line = marketLine(g, S.market, tm), ev = marketEval(g, S.market, tm, side, line);
     slip = slip.filter(l => !(l.type === 'g' && l.gameId === g.id && l.market === S.market && l.team === tm)); addLeg({ type: 'g', gameId: g.id, market: S.market, team: tm, side, line, odd: ev.eo.v }); return render(); }
   if (act === 'save-fondo') return saveFondo();
   if (act === 'add-ml') { const g = findGame(S.gameId), tm = S.mTeam === 'home' ? g.home : g.away, ev = marketEval(g, 'ml', tm, 'over', 0);
@@ -1875,9 +1966,9 @@ app.addEventListener('change', e => {
   const t = e.target, v = num(t.value);
   if (t.id === 'pline' && v >= 0) { uLines[lineKey(S.pid, S.stat)] = Math.round(v * 2) / 2; saveUser(); render(); }
   if (t.id === 'podd') { const key = lineKey(S.pid, S.stat) + '|' + getSide(lineKey(S.pid, S.stat)); if (v > 1) uOdds[key] = Math.round(v * 100) / 100; else delete uOdds[key]; saveUser(); render(); }
-  if (t.id === 'gline' || t.id === 'godd') { const g = findGame(S.gameId), tm = S.market === 'total' ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm);
+  if (t.id === 'gline' || t.id === 'godd') { const g = findGame(S.gameId), tm = GAME_MK.has(S.market) ? null : (S.mTeam === 'home' ? g.home : g.away), key = marketKey(g, S.market, tm);
     if (t.id === 'gline' && isFinite(v)) uLines[key] = Math.round(v * 2) / 2;
-    if (t.id === 'godd') { const sd = S.market === 'total' || S.market === 'pts' ? getSide(key) : 'over'; if (v > 1) uOdds[key + '|' + sd] = Math.round(v * 100) / 100; else delete uOdds[key + '|' + sd]; }
+    if (t.id === 'godd') { const sd = TWO(S.market) ? getSide(key) : 'over'; if (v > 1) uOdds[key + '|' + sd] = Math.round(v * 100) / 100; else delete uOdds[key + '|' + sd]; }
     saveUser(); render(); }
   if (t.id === 'rest') { S.rest = t.value; render(); }
   if (t.id === 'lgame') { S.lGame = t.value; render(); }

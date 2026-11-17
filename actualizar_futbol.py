@@ -10,6 +10,7 @@ Qué hace:
   2. Estadísticas de cada jugador en cada partido terminado de las 4 competiciones (goles,
      asistencias, tiros, tiros a puerta, faltas, tarjetas, paradas y minutos). Se guardan en
      futbol_cache.json: solo la primera vez se bajan las dos temporadas enteras.
+     También las de cada equipo (córners, tarjetas, tiros, faltas, fueras de juego, posesión, pases...).
   3. Partidos de los próximos 7 días.
   4. Guarda futbol.json (mismo formato que nba.json) y, con --subir, lo sube a Supabase (snapshots, id 'futbol').
 
@@ -38,7 +39,13 @@ CACHE = os.path.join(CARPETA, "futbol_cache.json")
 
 # Por partido de un jugador. min = minutos jugados (90 si fue titular y no salió).
 LOG_COLS = ["date", "opp", "home", "min", "g", "a", "sh", "sot", "fc", "yc", "rc", "sv", "season", "comp"]
-TEAM_COLS = ["date", "opp", "home", "pts", "opp_pts", "season", "comp"]
+# Estadísticas de equipo por partido (ESPN boxscore). Cada una va en pareja: la del equipo y la del rival (_a).
+# ht = goles al descanso, cor = córners, off = fueras de juego, pos = posesión %, pas = pases, pp = % de pases buenos.
+# Faltas recibidas = fc_a. ESPN no da saques de banda, de puerta ni tiros libres.
+EQ_STATS = {"sh": "totalShots", "sot": "shotsOnTarget", "cor": "wonCorners", "fc": "foulsCommitted", "yc": "yellowCards",
+            "rc": "redCards", "off": "offsides", "sv": "saves", "pos": "possessionPct", "pas": "totalPasses",
+            "pp": "passPct", "tk": "totalTackles", "ht": None}
+TEAM_COLS = ["date", "opp", "home", "pts", "opp_pts", "season", "comp"] + [k + suf for k in EQ_STATS for suf in ("", "_a")]
 
 
 def http():
@@ -113,8 +120,32 @@ def eventos(slug: str, inicio: int) -> list[dict]:
     return out
 
 
-def leer_partido(slug: str, ev_id: str) -> list[dict] | None:
-    """Jugadores de un partido terminado: [{id, name, team_id, pos, min, g, a, sh, sot, fc, yc, rc, sv, home}]."""
+def num(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def leer_equipos(j: dict) -> dict:
+    """{'home': {sh, sot, cor, ...}, 'away': {...}} del resumen de ESPN."""
+    out = {}
+    for t in (j.get("boxscore") or {}).get("teams") or []:
+        st = {x.get("name"): num(x.get("displayValue")) for x in t.get("statistics") or []}
+        fila = {k: st.get(v) for k, v in EQ_STATS.items() if v}
+        if fila.get("pp") is not None:   # ESPN redondea passPct a 1 decimal: mejor buenos / totales
+            ok, tot = st.get("accuratePasses"), st.get("totalPasses")
+            fila["pp"] = round(100 * ok / tot) if ok is not None and tot else None
+        out[t.get("homeAway")] = fila
+    for c in ((j.get("header") or {}).get("competitions") or [{}])[0].get("competitors") or []:
+        ls = c.get("linescores") or []
+        if c.get("homeAway") in out and ls:
+            out[c["homeAway"]]["ht"] = num(ls[0].get("displayValue"))
+    return out if len(out) == 2 else {}
+
+
+def leer_partido(slug: str, ev_id: str) -> dict | None:
+    """Partido terminado: {'p': [jugadores: {id, name, team_id, pos, min, g, a, sh, sot, fc, yc, rc, sv, home}], 't': equipos}."""
     j = get(f"{ESPN}/{slug}/summary?event={ev_id}")
     if not j:
         return None
@@ -148,12 +179,13 @@ def leer_partido(slug: str, ev_id: str) -> list[dict] | None:
                         "pos": pos_corta((p.get("position") or {}).get("abbreviation")), "min": minutos,
                         "g": n("totalGoals"), "a": n("goalAssists"), "sh": n("totalShots"), "sot": n("shotsOnTarget"),
                         "fc": n("foulsCommitted"), "yc": n("yellowCards"), "rc": n("redCards"), "sv": n("saves")})
-    return out
+    return {"p": out, "t": leer_equipos(j)}
 
 
 def construir(hoy: datetime) -> dict:
     actual, anterior = temporadas(hoy)
     cache = json.load(open(CACHE, encoding="utf-8")) if os.path.exists(CACHE) else {}
+    cache = {k: v for k, v in cache.items() if isinstance(v, dict)}   # formato viejo (solo jugadores): se baja otra vez
     todos = []
     for slug in list(COMPS) + EXTRA:
         for ini in (anterior, actual):
@@ -177,18 +209,6 @@ def construir(hoy: datetime) -> dict:
                               "color": "#" + (t.get("color") or "3a4558"), "alt": "#" + (t.get("alternateColor") or "ffb84d")}
                   for tid, t in info.items()}
 
-    # Resultados por equipo (todas las competiciones, también las de resultados solo)
-    equipos = defaultdict(list)
-    vistos = set()
-    for e in sorted(todos, key=lambda e: e["start"] or ""):
-        if not e["completed"] or e["id"] in vistos:
-            continue
-        vistos.add(e["id"])
-        d = (e["start"] or "")[:10]
-        h, a = code[e["home"]["id"]], code[e["away"]["id"]]
-        equipos[h].append([d, a, True, e["hs"], e["as"], e["season"], e["comp"]])
-        equipos[a].append([d, h, False, e["as"], e["hs"], e["season"], e["comp"]])
-
     # Jugadores de los partidos terminados de las 4 competiciones (con caché)
     pendientes = [e for e in todos if e["comp"] in COMPS and e["completed"] and e["id"] not in cache]
     print(f"Partidos con jugadores: {len(pendientes)} nuevos ({len(cache)} ya guardados)…")
@@ -204,12 +224,28 @@ def construir(hoy: datetime) -> dict:
                 json.dump(cache, open(CACHE, "w", encoding="utf-8"), separators=(",", ":"))
     json.dump(cache, open(CACHE, "w", encoding="utf-8"), separators=(",", ":"))
 
+    # Resultados por equipo (todas las competiciones; estadísticas solo en las 4 nuestras)
+    equipos = defaultdict(list)
+    vistos = set()
+    for e in sorted(todos, key=lambda e: e["start"] or ""):
+        if not e["completed"] or e["id"] in vistos:
+            continue
+        vistos.add(e["id"])
+        d = (e["start"] or "")[:10]
+        h, a = code[e["home"]["id"]], code[e["away"]["id"]]
+        t = (cache.get(e["id"]) or {}).get("t") or {}
+        H, A = t.get("home") or {}, t.get("away") or {}
+        eh = [x for k in EQ_STATS for x in (H.get(k), A.get(k))]
+        ea = [x for k in EQ_STATS for x in (A.get(k), H.get(k))]
+        equipos[h].append([d, a, True, e["hs"], e["as"], e["season"], e["comp"]] + eh)
+        equipos[a].append([d, h, False, e["as"], e["hs"], e["season"], e["comp"]] + ea)
+
     logs, jugadores, posiciones = defaultdict(list), {}, defaultdict(Counter)
     for e in sorted(todos, key=lambda e: e["start"] or ""):
         if e["id"] not in cache:
             continue
         d = (e["start"] or "")[:10]
-        for p in cache[e["id"]]:
+        for p in cache[e["id"]]["p"]:
             tm = code.get(p["team_id"])
             if not tm:
                 continue
