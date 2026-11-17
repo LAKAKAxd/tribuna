@@ -1618,7 +1618,11 @@ async function boot() {
 }
 let booting = false, pendingCode = '', groupCode = null, oddsCredits = null;
 async function bootReal() {
-  sb = sb || window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey);
+  /* Se entra solo con correo y contraseña. Si la dirección guardada (marcador o icono del móvil) trae restos de un
+     enlace de correo (#access_token=… o #error_description=…), Supabase intentaba usarlos, fallaba y borraba la
+     sesión en cada recarga. Por eso no se leen sesiones de la dirección y se limpian esos restos. */
+  if (/(access_token|error_description|refresh_token)=/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
+  sb = sb || window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, { auth: { detectSessionInUrl: false } });
   const { data: { session } } = await sb.auth.getSession();
   if (!session) { app.innerHTML = `<div class="shell">${viewLogin('')}</div>`; return; }
   userEmail = session.user.email || '';
