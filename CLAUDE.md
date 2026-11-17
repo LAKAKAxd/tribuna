@@ -29,7 +29,7 @@ App web de estadísticas NBA para apuestas, para Fabio (vive en Italia) y sus am
 
 ## Supabase
 - https://ulfxhbkoabqfyljteyab.supabase.co · tablas `snapshots`, `odds`, `admins`, `apuestas` (+ grupo). Registro cerrado: Fabio invita usuarios a mano (Auto Confirm).
-- Pendiente de confirmar que Fabio ejecutó `supabase_cuotas.sql` y `supabase_grupo.sql`, y la Site URL.
+- `supabase_cuotas.sql` y `supabase_grupo.sql` ya ejecutados (confirmado 17/11/2026). Pendiente: revisar la Site URL.
 
 ## Interruptores en `app/config.js`
 - `logosOficiales: true` y `fotosOficiales: true` (logos y fotos de NBA.com). **Solo uso privado: ponerlos en `false` antes de publicar la app.**
@@ -45,5 +45,4 @@ App web de estadísticas NBA para apuestas, para Fabio (vive en Italia) y sus am
 - Inspirarse en otras apps sin copiar su marca ni su diseño.
 
 ## Pendientes
-- En su PC quedó un commit local de prueba en `main` (f03f000) sin publicar; si `git pull` da conflicto: `git reset --hard origin/main` (no toca config.env). Solo con permiso de Fabio.
 - ScoreboardV2 de nba_api está obsoleto: pasar a V3.
