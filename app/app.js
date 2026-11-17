@@ -946,12 +946,29 @@ function snapshot(id) {
 async function fetchBox(id) { const j = await fetchNba('boxscore', id); return j ? parseBox(j) : null; }
 const OPENBETS = new Set(), OPENBOX = new Set();
 function openGameIds() { return [...new Set(BETS.filter(b => OPENBETS.has(b.id)).flatMap(b => b.legs.map(l => l.gameId)).filter(Boolean))]; }
+/* Datos para buscar un partido en ESPN: fecha (EE. UU.) y equipos, sacados de los partidos de hoy o de la apuesta. */
+function gameRef(id) {
+  const g = D.games.find(x => x.id === id); if (g) return { date: g.date, home: g.home, away: g.away };
+  for (const b of BETS) for (const l of b.legs) if (l.gameId === id) return { date: b.date, home: l.home, away: l.away, team: l.team || D.players[l.pid]?.team };
+  return null;
+}
+let espnOk = true;
+async function fetchLive(id) {
+  const E = window.TRIBUNA_ESPN, ref = gameRef(id);
+  if (E && ref && espnOk) {
+    try { const r = await E.live({ ...ref, players: Object.values(D.players).map(p => ({ id: p.id, name: p.name, team: p.team })) }); if (r) { PBP[id] = r.pbp; return r.box; } }
+    catch (e) { console.warn('Directo ESPN', e); }
+  }
+  const box = await fetchBox(id);
+  if (box && box.state !== 'pre' && openGameIds().includes(id)) { try { const j = await fetchNba('playbyplay', id); if (j) PBP[id] = parsePbp(j); } catch (e) {} }
+  return box;
+}
 async function pollLive() {
   const ids = [...new Set(BETS.filter(b => !b.result).flatMap(b => b.legs.map(l => l.gameId)).filter(id => id && D.games.some(g => g.id === id)).concat(openGameIds()))];
-  for (const id of ids) {
-    if (LIVE[id]?.state !== 'final') { try { const box = await fetchBox(id); if (box) { LIVE[id] = box; snapshot(id); } } catch (e) {} }
-    if (openGameIds().includes(id) && LIVE[id] && LIVE[id].state !== 'pre' && !(LIVE[id].state === 'final' && PBP[id])) { try { const j = await fetchNba('playbyplay', id); if (j) PBP[id] = parsePbp(j); } catch (e) {} }
-  }
+  await Promise.all(ids.map(async id => {
+    if (LIVE[id]?.state === 'final' && PBP[id]) return;
+    try { const box = await fetchLive(id); if (box) { LIVE[id] = box; snapshot(id); } } catch (e) {}
+  }));
   settleAll(); if (['bets'].includes(S.view)) render();
 }
 function startLive() {
