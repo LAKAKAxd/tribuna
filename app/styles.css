@@ -426,3 +426,21 @@ table.box th,table.box td{padding:6px 7px}
 .days button[aria-selected="true"]{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
 .days button[aria-selected="true"] small{color:var(--acc-ink);opacity:.8}
 .mid .xs{display:block;font-size:10.5px;color:var(--mut);text-transform:capitalize}
+
+/* ---------- PC (≥1024px): barra lateral y listas en columnas ---------- */
+@media (min-width:1024px){
+  .tabbar{right:auto;top:0;width:200px;border-top:0;border-right:1px solid var(--edge);padding:76px 12px 20px}
+  .tabbar nav{flex-direction:column;gap:4px}
+  .tabbar button{flex-direction:row;gap:12px;font-size:14px;padding:11px 14px;border-radius:12px;min-width:0}
+  .tabbar button:hover{background:var(--glass)}
+  .tabbar button[aria-current="page"]{background:var(--glass)}
+  .tabbar .badge{position:static;margin-left:auto}
+  .shell:has(+.tabbar){--w:1120px;max-width:var(--w);margin-left:max(200px,calc(50vw - var(--w) / 2 + 100px));padding-left:32px;padding-right:32px;padding-bottom:60px}
+  .top{margin-inline:-32px;padding-inline:32px}
+  .shell:has(.top .ttl){--w:900px}
+  .stack:has(>.game){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+  .stack:has(>.game)>:not(.game){grid-column:1/-1}
+  .plist,.stack:has(>.bet){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:start}
+  .bet.expanded{grid-column:1/-1}
+  .floatbar{bottom:24px;left:calc(50% + 100px)}
+}
