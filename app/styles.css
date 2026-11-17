@@ -454,3 +454,15 @@ table.box th,table.box td{padding:6px 7px}
 .profile{display:flex;align-items:center;gap:14px}.profile .mail{display:block;font-size:16px;overflow-wrap:anywhere}
 .btn.danger{background:none;border:1px solid color-mix(in srgb,var(--miss) 60%,transparent);color:var(--miss)}
 @media (max-width:420px){.top .fresh{font-size:0;gap:0;padding:0 4px}}
+
+.bet-h .x{display:grid;place-items:center}.bet-h .x svg{width:16px;height:16px}
+/* Compartir ticket: tarjeta que se captura (fuera de la pantalla) y vista previa */
+.tk-wrap{position:fixed;left:-10000px;top:0;pointer-events:none}
+.tk-png{width:540px;background:var(--bg);color:var(--ink);padding:26px 20px 20px}
+.tk-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}.tk-top .brand{flex:none;font-size:30px}
+.tk-legal{text-align:center;color:var(--mut);font-size:12px;margin:14px 0 0}
+.sharebox{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.72);display:grid;place-items:center;padding:16px}
+.sharebox .card{width:100%;max-width:440px;max-height:92vh;overflow:auto;background:var(--surf)}
+.sharebox img{width:100%;display:block;border-radius:12px}
+.sh-btns{display:flex;gap:8px}.sh-btns .btn{flex:1;text-align:center;text-decoration:none}
+.bet-h .x:disabled{opacity:.4}
