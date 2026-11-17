@@ -470,3 +470,8 @@ table.box th,table.box td{padding:6px 7px}
 .who-bet{display:flex;align-items:center;gap:8px;margin:6px 2px -4px;font-size:13.5px}
 .rank tr.me td{background:var(--acc-soft)}
 .chk{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;line-height:1.35}.chk input{margin-top:3px;width:18px;height:18px;accent-color:var(--acc);flex:none}
+/* Props: filtros y favoritas */
+.pfilters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.pfilters select.field{width:auto;flex:1 1 160px;min-width:0;padding-top:8px;padding-bottom:8px}
+.pfilters .chip[aria-pressed="true"]{background:var(--acc-soft);border-color:var(--acc);color:var(--acc)}
+.prow-w{display:flex;align-items:center;border-top:1px solid var(--edge)}.prow-w:first-child{border-top:0}.prow-w .prow{border-top:0;flex:1;min-width:0}
+.fav{border:0;background:none;color:var(--mut);font-size:20px;line-height:1;padding:10px 12px 10px 2px;opacity:.55}.fav[aria-pressed="true"]{color:var(--acc);opacity:1}

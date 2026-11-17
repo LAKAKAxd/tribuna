@@ -110,3 +110,13 @@ Para probar sin subir nada: `py actualizar_cuotas.py --prueba` (o `--solo propli
 1. En Supabase > SQL Editor ejecuta `supabase_valor_grupo.sql` (una sola vez).
 2. **¿Acierta el valor?** (pestaña Cuotas o Configuración, solo el administrador): cada vez que abres la app después de que se carguen las cuotas y antes de los partidos, la app guarda lo que decía el modelo de cada apuesta. Con el tiempo ves si las apuestas «Con valor» ganan de verdad (apostando 1 unidad a cada una). Hacen falta unas semanas (~200 apuestas cerradas) para que el resultado no sea suerte.
 3. **Grupo** (pestaña Apuestas > Grupo): cada uno, en Configuración, elige el nombre que verán los demás y si comparte sus apuestas. Quien comparte sale en el ranking (ordenado por rentabilidad) y sus tickets se ven en el muro. El correo nunca se enseña.
+
+### Instalar Tribuna como app
+- iPhone (Safari): botón Compartir > «Añadir a pantalla de inicio». Android (Chrome): menú ⋮ > «Instalar app» o «Añadir a pantalla de inicio».
+- Se abre a pantalla completa con su icono. Hace falta para los avisos en iPhone.
+
+### Avisos en el móvil (con la app cerrada)
+1. Supabase > **Edge Functions** > «Deploy a new function» > «Via Editor». Nombre: `avisos`. Pega todo `supabase/functions/avisos/index.ts`. En los ajustes de la función, **desactiva «Verify JWT»** (la función usa su propia clave). Deploy.
+2. Supabase > SQL Editor: pega `supabase_avisos.sql` entero y Run (una sola vez). Programa la función cada 2 minutos.
+3. En la app (en iPhone, abierta desde el icono de la pantalla de inicio): Configuración > Avisos > «Activar avisos». En 2 minutos llega un aviso de prueba.
+Avisa de: ticket ganado o perdido, selección cumplida en combinadas y «a X le faltan 2» (10 en yardas). Cada aviso llega una sola vez.

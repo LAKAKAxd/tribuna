@@ -12,6 +12,9 @@ App web de estadísticas NBA y NFL para apuestas, para Fabio (vive en Italia) y 
 - **Cuotas** (solo admin): pegar líneas a mano.
 - **¿Acierta el valor?** (admin, desde Cuotas o Configuración): la app del administrador guarda en la tabla `valor` antes de cada partido cada apuesta con cuota (`recordValue`, solo partidos no empezados) y después la cierra con los datos (`valueResult`). Muestra acierto frente a lo esperado, beneficio a 1 unidad por franjas de valor y modelo frente a cuota. Necesita que Fabio abra la app tras las cuotas de las 18:00/21:00.
 - **Grupo** (Apuestas > Grupo): cada uno elige en Configuración un nombre visible y si comparte sus apuestas (tabla `perfiles`). Ranking por rentabilidad (cada uno en su moneda) y muro de tickets. La base de datos solo deja leer las apuestas de quien comparte; las propias se cargan con `user_id` = el suyo.
+- **App instalable**: `app/manifest.webmanifest`, iconos en `app/icons/` (los genera un script de Pillow; «T.» con punto ámbar) y `app/sw.js` (solo avisos, sin caché para no quedarse con versiones viejas).
+- **Avisos con la app cerrada**: el móvil se apunta en Configuración (`avisos_subs`, con su idioma). La función de Supabase `supabase/functions/avisos/index.ts` corre cada 2 minutos (pg_cron, `supabase_avisos.sql`), mira ESPN y manda una sola vez (tabla `avisos_enviados`): ticket ganado/perdido, selección cumplida en combinadas y «le faltan N» (2, o 10 yardas). Las claves VAPID las crea la propia función y viven en `avisos_config`. iPhone: solo con la app añadida a la pantalla de inicio.
+- **Filtros de Props**: partido, posición, solo con valor y favoritas (★, `localStorage` por liga).
 - **Compartir ticket**: botón en cada apuesta. Pinta la tarjeta desplegada fuera de la pantalla con el logo de Tribuna y la captura con html-to-image (jsdelivr, se carga solo al compartir); escudos y fotos de NBA.com se cambian por los de ESPN porque NBA.com no deja exportarlos (la foto usa el `eid` de ESPN del directo). Vista previa con Compartir (menú del móvil) y Descargar.
 - **Configuración** (foto de perfil arriba a la derecha): correo con foto predeterminada, idioma (español, italiano, inglés), moneda (solo cambia el símbolo y el formato, no convierte), cambiar contraseña y cerrar sesión. Se guarda en `localStorage` (`tribuna:lang`, `tribuna:cur`).
 - **Idiomas**: la app se escribe en español y `app/i18n.js` traduce lo que se pinta (filas `[es, it, en]` en `T`; textos con números o nombres en `R`). **Cada texto nuevo de la app necesita su fila en `i18n.js`.** Fechas y números salen en el idioma elegido (`LOC` en `app.js`).
@@ -22,11 +25,11 @@ App web de estadísticas NBA y NFL para apuestas, para Fabio (vive en Italia) y 
 - `actualizar_nfl.py` estadísticas de nflverse (GitHub, sin clave) → `nfl.json` → `snapshots` id `nfl`. En NFL la columna `min` son oportunidades (pases + carreras + targets).
 - `actualizar_cuotas.py [--liga nfl]` cuotas → tabla `odds` (las NFL con prefijo `nfl:` en `player_id`); llama a `bajas.py` (parte de lesiones de ESPN → `snapshots` id `bajas` / `bajas_nfl`).
 - `*.bat` ejecutar y programar tareas de Windows. `herramientas/probar_directo.js` prueba el directo de ESPN con `nba.json`.
-- `supabase.sql`, `supabase_cuotas.sql`, `supabase_grupo.sql`, `supabase_valor_grupo.sql` esquema; `supabase/functions/nba-live` proxy de NBA.com (**no desplegado**, no hace falta).
+- `supabase.sql`, `supabase_cuotas.sql`, `supabase_grupo.sql`, `supabase_valor_grupo.sql`, `supabase_avisos.sql` esquema; `supabase/functions/nba-live` proxy de NBA.com (**no desplegado**, no hace falta).
 
 ## Publicar
 - GitHub Pages desde `main` de github.com/LAKAKAxd/tribuna → https://lakakaxd.github.io/tribuna/app/ (demo: `?demo`; demo NFL: elegir NFL arriba).
-- **Siempre** que cambies algo de `app/`, sube el número `?v=` de todos los scripts y estilos en `app/index.html` (último: 1794903100). Si no, los navegadores siguen con la versión vieja.
+- **Siempre** que cambies algo de `app/`, sube el número `?v=` de todos los scripts y estilos en `app/index.html` (último: 1794904000). Si no, los navegadores siguen con la versión vieja.
 - Comprueba la sintaxis: `node -e "new Function(require('fs').readFileSync('app/app.js','utf8'))"`. Para ver la app sin Supabase, abre `app/index.html?demo` con un servidor local.
 
 ## Datos y horarios (PC de Fabio, Windows, carpeta C:\Users\fabio\Tribuna)
@@ -54,6 +57,7 @@ App web de estadísticas NBA y NFL para apuestas, para Fabio (vive en Italia) y 
 - Inspirarse en otras apps sin copiar su marca ni su diseño.
 
 ## Pendientes
+- Avisos: función «avisos» desplegada y `supabase_avisos.sql` ejecutado (17/11/2026, logs con 200 cada 2 min). Falta probar la llegada de avisos en un iPhone.
 - `supabase_valor_grupo.sql` ya ejecutado (confirmado 17/11/2026).
 - ScoreboardV2 de nba_api está obsoleto: pasar a V3.
 - NFL: probar las cuotas reales (`py actualizar_cuotas.py --liga nfl --prueba`); los nombres de mercado de PropLine/SportsGameOdds para NFL no se han comprobado con una respuesta real.

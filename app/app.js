@@ -12,7 +12,7 @@ const LANG = ['es', 'it', 'en'].includes(window.TRIBUNA_LANG) ? window.TRIBUNA_L
 const LOC = { es: 'es-ES', it: 'it-IT', en: 'en-GB' }[LANG];
 
 /* ---------- utilidades ---------- */
-const PER_LIGA = new Set(['lines', 'uodds', 'sides', 'demo-odds']);   // líneas y cuotas propias: por liga. Boleto y apuestas: uno para todas
+const PER_LIGA = new Set(['lines', 'uodds', 'sides', 'demo-odds', 'favs']);   // líneas y cuotas propias: por liga. Boleto y apuestas: uno para todas
 const skey = k => 'tribuna:' + (NFL && PER_LIGA.has(k) ? 'nfl:' : '') + k;
 const store = {
   get(k, d) { try { const v = localStorage.getItem(skey(k)); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -142,6 +142,7 @@ let BAJAS = {}, BAJAS_AT = null;   // id NBA -> { status: 'out'|'doubtful'|'ques
 let D = null, ODDS = {}, sb = null, isAdmin = DEMO, userEmail = '', userId = DEMO ? 'demo-yo' : '';
 const S = { view: 'hoy', back: [], gameId: null, pid: null, stat: LG.statDef, win: 'l10', venue: 'all', minMin: 0, rest: 'all',
   market: 'ml', mTeam: 'home', gwin: 'l10', gtab: 'game', gvenue: 'all', tstat: LG.teamStat, twin: 'l10', range: 'month', calMonth: '', calDay: null, stake: '', betOdd: '', listTab: 'players', listStat: 'all', listWin: 'l10', draft: '', saving: false, msg: '' };
+let FAVS = store.get('favs', []);   // props favoritas (jugador|estadística o mercado de partido)
 let slip = store.get('slip', []), uLines = store.get('lines', {}), uOdds = store.get('uodds', {}), sides = store.get('sides', {});
 const saveUser = () => { store.set('slip', slip); store.set('lines', uLines); store.set('uodds', uOdds); store.set('sides', sides); };
 
@@ -511,6 +512,36 @@ function tabBar() {
   return `<div class="tabbar"><nav>${t.map(([v, l, i]) => `<button data-nav="${v}" ${root === v ? 'aria-current="page"' : ''}>${i}${l}${v === 'slip' && slip.length ? `<span class="badge">${slip.length}</span>` : ''}</button>`).join('')}</nav></div>`;
 }
 const legal = () => `<footer class="legal">Estimaciones a partir de partidos pasados; no garantizan nada. +18 · Juega solo lo que puedas permitirte perder.${DEMO ? '<br>Modo demostración: estadísticas y cuotas simuladas.' : ''}</footer>`;
+/* ---------- avisos en el móvil ----------
+   La función «avisos» de Supabase (cada 2 minutos) manda las notificaciones aunque la app esté cerrada. Aquí cada
+   móvil se apunta: pide permiso, se suscribe con la clave pública de Supabase y guarda la suscripción en avisos_subs.
+   En iPhone solo funciona con Tribuna añadida a la pantalla de inicio (iOS 16.4 o posterior). */
+const PUSH_OK = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent), STANDALONE = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+let PUSH = null, PUSH_MSG = '';   // null = sin mirar | 'on' | 'off'
+const b64u = x => { const b = atob((x + '='.repeat((4 - x.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+async function pushSub() { const reg = await navigator.serviceWorker.getRegistration(); return reg ? reg.pushManager.getSubscription() : null; }
+async function enablePush() {
+  if (await Notification.requestPermission() !== 'granted') return 'Los avisos están bloqueados: actívalos en los ajustes del móvil para Tribuna.';
+  const cf = await sb.from('avisos_config').select('valor').eq('clave', 'vapid_public').maybeSingle();
+  if (cf.error || !cf.data) return 'Los avisos aún no están activados en Supabase (falta la función «avisos»).';
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(cf.data.valor) });
+  const j = sub.toJSON();
+  const { error } = await sb.from('avisos_subs').upsert({ endpoint: j.endpoint, user_id: userId, p256dh: j.keys.p256dh, auth: j.keys.auth, lang: LANG });
+  if (error) { await sub.unsubscribe(); return 'No se pudo guardar: ' + error.message; }
+  return '';
+}
+async function disablePush() { const sub = await pushSub(); if (sub) { await sb.from('avisos_subs').delete().eq('endpoint', sub.endpoint); await sub.unsubscribe(); } }
+function avisosCard() {
+  const head = '<h3>Avisos</h3><p class="note" style="margin:0">Te avisa en el móvil aunque tengas la app cerrada: cuando un ticket se gana o se pierde, cuando se cumple una selección de una combinada y cuando a un jugador le falta poco.</p>';
+  if (DEMO) return `<div class="card pad stack">${head}<p class="note" style="margin:0">En la demo no hay avisos.</p></div>`;
+  if (IOS && !STANDALONE) return `<div class="card pad stack">${head}<p class="sm" style="margin:0">En iPhone, primero añade Tribuna a la pantalla de inicio (botón Compartir > «Añadir a pantalla de inicio») y ábrela desde ese icono.</p></div>`;
+  if (!PUSH_OK) return `<div class="card pad stack">${head}<p class="sm" style="margin:0">Este navegador no permite avisos.</p></div>`;
+  if (PUSH == null) pushSub().then(x => { PUSH = x ? 'on' : 'off'; if (S.view === 'config') render(); }).catch(() => { PUSH = 'off'; });
+  return `<div class="card pad stack">${head}${PUSH === 'on' ? '<div class="sm ok">Avisos activados en este móvil.</div><button class="btn ghost" data-act="push-off">Desactivar avisos</button>' : '<button class="btn" data-act="push-on">Activar avisos</button>'}${PUSH_MSG ? `<div class="sm ${PUSH === 'on' ? 'ok' : 'err'}">${esc(PUSH_MSG)}</div>` : ''}</div>`;
+}
+
 /* ---------- vista: configuración ---------- */
 function viewConfig() {
   const LANGS = [['es', 'Español'], ['it', 'Italiano'], ['en', 'English']];
@@ -523,6 +554,7 @@ function viewConfig() {
       <label for="pname" class="sm mut">Nombre que ven tus amigos (tu correo no se enseña)</label><input id="pname" class="field" minlength="2" maxlength="24" required value="${esc(myPerfil()?.nombre || (DEMO ? 'Yo' : userEmail.split('@')[0]))}">
       <label class="chk" for="pshare"><input type="checkbox" id="pshare"${myPerfil()?.compartir ? ' checked' : ''}> <span>Compartir mis apuestas con el grupo: salgo en el ranking y mis tickets se ven en «Grupo»</span></label>
       <button class="btn ghost" type="submit">Guardar</button><div id="pmsg" class="sm"></div></form>` : ''}
+    ${avisosCard()}
     ${isAdmin ? '<button class="btn ghost" data-act="valor">¿Acierta el valor? Ver el registro</button>' : ''}
     ${DEMO ? '' : `<div class="card pad stack"><h3>Contraseña</h3><form id="newpass" class="ctl" style="gap:8px"><input id="np" class="field" type="password" minlength="6" required autocomplete="new-password" placeholder="Nueva contraseña (mín. 6)" aria-label="Nueva contraseña" style="flex:1;min-width:0"><button class="btn ghost" type="submit">Guardar</button></form><div id="npmsg" class="sm"></div></div>
     <button class="btn danger" data-act="logout">Cerrar sesión</button>`}
@@ -836,22 +868,29 @@ function propRows(tab, stat, win) {
   return rows;
 }
 function viewProps() {
-  const rows = propRows(S.listTab, S.listStat, S.listWin);
+  /* Filtros: partido, posición, solo con valor y favoritas (★, se guardan en este navegador). */
+  const all = propRows(S.listTab, S.listStat, S.listWin), fav = new Set(FAVS), pl = S.listTab === 'players';
+  const keyOf = r => r.type === 'p' ? lineKey(r.p.id, r.k) : r.ev.key, gid = r => r.type === 'p' ? gameOfTeam(r.p.team)?.id : r.g.id, edge = r => (r.type === 'p' ? r.b.edge : r.ev.edge) ?? -99;
+  const rows = all.filter(r => (!S.lGame || S.lGame === 'all' || gid(r) === S.lGame) && (!pl || !S.lPos || S.lPos === 'all' || r.p.pos === S.lPos) && (!S.lValue || edge(r) >= 3) && (!S.lFav || fav.has(keyOf(r))));
+  const star = r => `<button class="fav" data-fav="${esc(keyOf(r))}" aria-pressed="${fav.has(keyOf(r))}" aria-label="Favorita" title="Favorita">★</button>`;
   const statChips = LG.listStats;
   return `${topBar('', false)}<div class="stack fade">
     <div><h1>${NFL ? 'Props de la semana' : 'Props de esta noche'}</h1><div class="mut sm">Ordenadas por valor frente a las cuotas cargadas hoy</div></div>
     <div class="row-between" style="flex-wrap:wrap"><div class="seg" role="group" aria-label="Tipo">${[['players', 'Jugadores'], ['games', 'Partidos']].map(([v, l]) => `<button data-ltab="${v}" aria-pressed="${S.listTab === v}">${l}</button>`).join('')}</div>
       ${S.listTab === 'players' ? `<div class="seg" role="group" aria-label="Tramo">${[['l5', 'L5'], ['l10', 'L10'], ['l20', 'L20'], ['cur', D.cur.slice(2)]].map(([v, l]) => `<button data-lwin="${v}" aria-pressed="${S.listWin === v}">${l}</button>`).join('')}</div>` : '<span class="note">Valor frente al modelo</span>'}</div>
     ${S.listTab === 'players' ? `<div class="chips">${statChips.map(s => `<button class="chip acc" data-lstat="${s}" aria-pressed="${S.listStat === s}">${s === 'all' ? 'Todas' : SK[s].l}</button>`).join('')}</div>` : ''}
-    <div class="card">${rows.length ? rows.map(r => r.type === 'p' ? `<button class="prow pl" data-open-p="${r.p.id}" data-open-k="${r.k}">
+    <div class="pfilters"><select id="lgame" class="field" aria-label="Partido"><option value="all">Todos los partidos</option>${D.games.map(g => `<option value="${esc(g.id)}"${S.lGame === g.id ? ' selected' : ''}>${g.away} @ ${g.home}</option>`).join('')}</select>
+      ${pl ? `<div class="seg" role="group" aria-label="Posición">${[['all', 'Todas'], ...Object.keys(LG.pos).map(x => [x, x])].map(([v, l]) => `<button data-lpos="${v}" aria-pressed="${(S.lPos || 'all') === v}" title="${esc(LG.pos[v] || '')}">${l}</button>`).join('')}</div>` : ''}
+      <button class="chip" data-lval="1" aria-pressed="${!!S.lValue}">Solo con valor</button><button class="chip" data-lfav="1" aria-pressed="${!!S.lFav}">★ Favoritas</button></div>
+    <div class="card">${rows.length ? rows.map(r => r.type === 'p' ? `<div class="prow-w"><button class="prow pl" data-open-p="${r.p.id}" data-open-k="${r.k}">
         ${CFG.fotosOficiales ? avatar(r.p, 44) : V.crest(r.p.team, 30, 'sm')}
         <div style="min-width:0"><div class="nm">${esc(r.p.name)}</div><div class="mut xs"><span class="sd ${r.b.side}">${r.b.side === 'over' ? 'Más' : 'Menos'}</span> ${dec(r.line)} ${SK[r.k].l}${r.b.eo.v ? ' · ' + dec(r.b.eo.v, 2) : ''}</div></div>
         <div class="sp">${spark(r.spark, r.line, r.b.side)}<div class="xs mut">${(() => { const v = r.spark, ok = v.filter(x => r.b.side === 'under' ? x < r.line : x > r.line).length; return `${ok}/${v.length} últimos`; })()}</div></div>
         <div class="rt"><div class="pc ${r.b.p >= .6 ? 'hi' : ''}">${pct(r.b.p)}</div><div class="xs ${r.b.edge >= 3 ? 'ok' : r.b.edge <= -3 ? 'err' : 'mut'}">${r.b.edge != null ? edgeTxt(r.b.edge) + ' valor' : '–'}</div></div>
-        </button>` : `<button class="prow" data-open-g="${esc(r.g.id)}" data-open-m="${r.m}" data-open-t="${r.tm === r.g.home ? 'home' : 'away'}">
+        </button>${star(r)}</div>` : `<div class="prow-w"><button class="prow" data-open-g="${esc(r.g.id)}" data-open-m="${r.m}" data-open-t="${r.tm === r.g.home ? 'home' : 'away'}">
         <div style="min-width:0"><div class="nm">${esc(marketLabel(r.g, r.m, r.tm, r.side, r.line))}</div><div class="mut xs">${r.g.away} @ ${r.g.home} · ${MARKET_N[r.m]}${r.ev.eo.v ? ' · ' + dec(r.ev.eo.v, 2) : ''}</div></div>
-        <div class="rt"><div class="pc ${r.ev.pModel >= .6 ? 'hi' : ''}">${pct(r.ev.pModel)}</div><div class="xs ${r.ev.edge >= 3 ? 'ok' : r.ev.edge <= -3 ? 'err' : 'mut'}">${r.ev.edge != null ? edgeTxt(r.ev.edge) + ' valor' : '–'}</div></div></button>`).join('')
-      : `<div class="empty"><b>Aún no hay cuotas cargadas hoy</b>${isAdmin ? 'Cárgalas en la pestaña Cuotas.' : 'El administrador las cargará antes de los partidos.'}</div>`}</div>
+        <div class="rt"><div class="pc ${r.ev.pModel >= .6 ? 'hi' : ''}">${pct(r.ev.pModel)}</div><div class="xs ${r.ev.edge >= 3 ? 'ok' : r.ev.edge <= -3 ? 'err' : 'mut'}">${r.ev.edge != null ? edgeTxt(r.ev.edge) + ' valor' : '–'}</div></div></button>${star(r)}</div>`).join('')
+      : all.length ? `<div class="empty"><b>Ninguna con estos filtros</b>Quita alguno para ver más.</div>` : `<div class="empty"><b>Aún no hay cuotas cargadas hoy</b>${isAdmin ? 'Cárgalas en la pestaña Cuotas.' : 'El administrador las cargará antes de los partidos.'}</div>`}</div>
     ${legal()}</div>`;
 }
 
@@ -1691,6 +1730,10 @@ app.addEventListener('click', async e => {
   if (d.range) { S.range = d.range; return render(); }
   if (d.calnav) { const [y, m] = S.calMonth.split('-').map(Number), n = new Date(Date.UTC(y, m - 1 + +d.calnav, 1)); S.calMonth = isoDay(n).slice(0, 7); S.calDay = null; return render(); }
   if (d.calday) { S.calDay = S.calDay === d.calday ? null : d.calday; return render(); }
+  if (d.fav) { const i = FAVS.indexOf(d.fav); if (i >= 0) FAVS.splice(i, 1); else FAVS.push(d.fav); store.set('favs', FAVS); return render(); }
+  if (d.lpos) { S.lPos = d.lpos; return render(); }
+  if (d.lval) { S.lValue = !S.lValue; return render(); }
+  if (d.lfav) { S.lFav = !S.lFav; return render(); }
   if (d.btab) { S.btab = d.btab; return render(); }
   if (d.grange) { S.gRange = d.grange; return render(); }
   if (d.share) { const bt = BETS.find(x => x.id === d.share); if (bt) { b.disabled = true; shareBet(bt).catch(err => { console.warn('Compartir', err); alert(window.TRIBUNA_I18N?.tr('No se pudo crear la imagen.') || 'No se pudo crear la imagen.'); }).finally(() => { b.disabled = false; }); } return; }
@@ -1715,6 +1758,8 @@ app.addEventListener('click', async e => {
     slip = slip.filter(l => !(l.type === 'g' && l.gameId === g.id && l.market === 'ml')); addLeg({ type: 'g', gameId: g.id, market: 'ml', team: tm, side: 'over', line: 0, odd: ev.eo.v }); return render(); }
   if (act === 'logout') { await sb.auth.signOut(); D = null; BETS = []; location.reload(); return; }
   if (act === 'valor') return go('valor');
+  if (act === 'push-on') { b.disabled = true; try { const err = await enablePush(); PUSH = err ? 'off' : 'on'; PUSH_MSG = err || 'Listo. En un par de minutos te llegará un aviso de prueba.'; } catch (e2) { PUSH_MSG = 'No se pudo activar: ' + (e2.message || e2); } return render(); }
+  if (act === 'push-off') { b.disabled = true; try { await disablePush(); } catch (e2) {} PUSH = 'off'; PUSH_MSG = ''; return render(); }
   if (act === 'sim-live') { simulateLive(); return render(); }
   if (act === 'clear-slip') { slip = []; saveUser(); return render(); }
   if (act === 'example' && NFL) { S.draft = 'Mahomes pyd 265,5 1,87 1,93\nKelce rec 5,5 1,90 1,90\nAllen pry 285,5 1,90 1,90\nKC ganador 1,45\nBUF ganador 2,80\nKC handicap -6,5 1,90\nBUF@KC total 47,5 1,90 1,90\nKC puntos 26,5 1,88 1,92'; S.msg = ''; return render(); }
@@ -1731,6 +1776,7 @@ app.addEventListener('change', e => {
     if (t.id === 'godd') { const sd = S.market === 'total' || S.market === 'pts' ? getSide(key) : 'over'; if (v > 1) uOdds[key + '|' + sd] = Math.round(v * 100) / 100; else delete uOdds[key + '|' + sd]; }
     saveUser(); render(); }
   if (t.id === 'rest') { S.rest = t.value; render(); }
+  if (t.id === 'lgame') { S.lGame = t.value; render(); }
   if (t.id === 'cur') { CUR = t.value; store.set('cur', CUR); if (myPerfil()) savePerfil({ ...myPerfil(), moneda: CUR }); render(); }
   if (t.id === 'minr') { S.minMin = +t.value; render(); }
 });
@@ -1822,6 +1868,7 @@ async function clearOdds() {
 
 /* ---------- arranque ---------- */
 async function boot() {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(e => console.warn('Service worker', e));
   app.innerHTML = `<div class="shell"><div class="empty" style="padding-top:30vh">Cargando…</div></div>`;
   if (DEMO) {
     const demo = NFL ? window.TRIBUNA_DEMO_NFL() : window.TRIBUNA_DEMO();
