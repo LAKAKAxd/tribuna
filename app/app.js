@@ -395,6 +395,7 @@ function valueAt(a, i) {
 /* Quién de la plantilla actual faltó en cada partido pasado y cuánto valía. */
 function absences() {
   if (D.abs) return D.abs;
+  if (SOC) return (D.abs = {});   // fútbol: sin bajas (y con ~5.000 jugadores costaba ~0,3 s al arrancar)
   const abs = {};
   for (const [t, T] of Object.entries(D.teams)) {
     abs[t] = {};
@@ -2041,6 +2042,18 @@ async function saveFondo() {
 }
 
 /* Supabase devuelve como mucho 1.000 filas por consulta: se piden por páginas. */
+/* Igual que pages, pero pide 6 páginas a la vez (12.000 cuotas de fútbol: de 14 consultas seguidas a 3 tandas). */
+const pagesPar = async q => {
+  const out = [];
+  for (let i = 0; ; i += 6000) {
+    const rs = await Promise.all([0, 1, 2, 3, 4, 5].map(k => q().range(i + k * 1000, i + k * 1000 + 999)));
+    for (const r of rs) {   // las páginas de después del final dan error: se para en la primera corta
+      if (r.error) return { data: out.length ? out : null, error: r.error };
+      out.push(...(r.data || []));
+      if (!r.data || r.data.length < 1000) return { data: out, error: null };
+    }
+  }
+};
 const pages = async q => { const out = []; for (let i = 0; ; i += 1000) { const r = await q().range(i, i + 999); if (r.error) return { data: out.length ? out : null, error: r.error }; out.push(...(r.data || [])); if (!r.data || r.data.length < 1000) return { data: out, error: null }; } };
 /* ---------- cuotas: guardar ---------- */
 const ODDS_PRE = NFL ? 'nfl:' : SOC ? 'fut:' : '';
@@ -2096,27 +2109,31 @@ async function bootReal() {
   if (pendingCode) { const j = await sb.rpc('unirse', { codigo: pendingCode }); pendingCode = ''; if (!j.error && j.data === false) { app.innerHTML = `<div class="shell">${viewJoin('Ese código no es correcto.')}</div>`; return; } }
   const mem = await sb.rpc('es_miembro');
   if (!mem.error && mem.data === false) { app.innerHTML = `<div class="shell">${viewJoin('')}</div>`; return; }
-  const [snap, adm] = await Promise.all([sb.from('snapshots').select('data').eq('id', LIGA).maybeSingle(), sb.from('admins').select('email').limit(1)]);
+  /* Todo se pide a la vez (antes iban ~20 consultas una detrás de otra). Las cuotas solo necesitan la fecha del primer
+     partido, que se lee aparte (es un dato pequeño) para no esperar a los ~10 MB de estadísticas. */
+  const gdOf = r => r.data?.d || todayET();
+  const gdq = sb.from('snapshots').select('d:data->games->0->>date').eq('id', LIGA).maybeSingle();
+  const [snap, adm, lg, bj, od, fd, ap, gc, cr] = await Promise.all([
+    sb.from('snapshots').select('data').eq('id', LIGA).maybeSingle(), sb.from('admins').select('email').limit(1),
+    SOC ? sb.from('snapshots').select('data').like('id', 'futbol_logs_%') : { data: [] },   // fútbol: historiales de jugadores en filas aparte
+    SOC ? { data: null } : sb.from('snapshots').select('data').eq('id', NFL ? 'bajas_nfl' : 'bajas').maybeSingle(),
+    gdq.then(r => pagesPar(() => oddsOfLiga(sb.from('odds').select('*').eq('game_date', gdOf(r))).order('player_id').order('stat'))),
+    sb.from('fondos').select('player_id,url'),
+    pages(() => sb.from('apuestas').select('data').eq('user_id', userId).order('created_at', { ascending: true })),
+    sb.from('ajustes').select('valor').eq('clave', 'codigo_grupo').maybeSingle(),
+    sb.from('ajustes').select('valor').eq('clave', NFL ? 'creditos_odds_nfl' : SOC ? 'creditos_odds_fut' : 'creditos_odds').maybeSingle(),
+    loadPerfiles(),
+  ]);
   if (snap.error || !snap.data) { app.innerHTML = `<div class="shell">${topBar('', false)}<div class="card empty" style="margin-top:20vh"><b>Aún no hay datos ${LIGA.toUpperCase()}</b>${esc(snap.error?.message || `Ejecuta actualizar_${LIGA}.py --subir en el ordenador del administrador.`)}</div></div>`; return; }
-  if (SOC && snap.data.data.log_parts) {   // fútbol: los historiales de jugadores vienen en filas aparte (futbol_logs_0, _1...)
-    const parts = await Promise.all(Array.from({ length: snap.data.data.log_parts }, (_, i) => sb.from('snapshots').select('data').eq('id', 'futbol_logs_' + i).maybeSingle()));
-    for (const p of parts) Object.assign(snap.data.data.logs, p.data?.data?.logs || {});
-  }
+  for (const p of lg.data || []) Object.assign(snap.data.data.logs, p.data?.logs || {});
   D = prepare(snap.data.data); isAdmin = !!adm.data?.length;
-  const bj = SOC ? { data: null } : await sb.from('snapshots').select('data').eq('id', NFL ? 'bajas_nfl' : 'bajas').maybeSingle();
   if (bj.data?.data) { BAJAS = bj.data.data.players || {}; BAJAS_AT = bj.data.data.updated || null; }
-  if (isAdmin) { const gc = await sb.from('ajustes').select('valor').eq('clave', 'codigo_grupo').maybeSingle(); groupCode = gc.data?.valor ?? null; }
-  const gd = D.games[0]?.date || todayET();
-  /* Supabase devuelve como mucho 1.000 filas por consulta y una noche puede tener ~2.000 cuotas: se piden por páginas. */
-  const allRows = pages;
-  const [od, fd] = await Promise.all([allRows(() => oddsOfLiga(sb.from('odds').select('*').eq('game_date', gd)).order('player_id').order('stat')), sb.from('fondos').select('player_id,url')]);
+  if (isAdmin) groupCode = gc.data?.valor ?? null;
   (fd.data || []).forEach(r => FONDOS[r.player_id] = r.url);
-  const ap = await allRows(() => sb.from('apuestas').select('data').eq('user_id', userId).order('created_at', { ascending: true }));
   BETS = (ap.data || []).map(r => r.data); S.calMonth = refDay().slice(0, 7);
   startLive();   // marcador de la pantalla principal y apuestas en juego, cada 30 s
   ODDS = {}; (od.data || []).forEach(r => ODDS[r.player_id.slice(ODDS_PRE.length) + '|' + r.stat] = { line: r.line == null ? null : +r.line, over: r.over_odd == null ? null : +r.over_odd, under: r.under_odd == null ? null : +r.under_odd, src: r.fuente || 'manual', at: r.updated_at });
-  if (isAdmin) { const cr = await sb.from('ajustes').select('valor').eq('clave', NFL ? 'creditos_odds_nfl' : SOC ? 'creditos_odds_fut' : 'creditos_odds').maybeSingle(); try { oddsCredits = cr.data ? JSON.parse(cr.data.valor) : null; } catch (e) { oddsCredits = null; } }
-  await loadPerfiles();
+  if (isAdmin) { try { oddsCredits = cr.data ? JSON.parse(cr.data.valor) : null; } catch (e) { oddsCredits = null; } }
   render();
   recordValue();   // administrador: guarda lo que dice el modelo antes de los partidos
 }
