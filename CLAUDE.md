@@ -35,7 +35,7 @@ App web de estadísticas NBA, NFL y fútbol para apuestas, para Fabio (vive en I
 
 ## Publicar
 - GitHub Pages desde `main` de github.com/LAKAKAxd/tribuna → https://lakakaxd.github.io/tribuna/app/ (demo: `?demo`; demo NFL: elegir NFL arriba).
-- **Siempre** que cambies algo de `app/`, sube el número `?v=` de todos los scripts y estilos en `app/index.html` (último: 1794960000). Si no, los navegadores siguen con la versión vieja.
+- **Siempre** que cambies algo de `app/`, sube el número `?v=` de todos los scripts y estilos en `app/index.html` (último: 1794970000). Si no, los navegadores siguen con la versión vieja.
 - Comprueba la sintaxis: `node -e "new Function(require('fs').readFileSync('app/app.js','utf8'))"`. Para ver la app sin Supabase, abre `app/index.html?demo` con un servidor local.
 
 ## Datos y horarios (PC de Fabio, Windows, carpeta C:\Users\fabio\Tribuna)
