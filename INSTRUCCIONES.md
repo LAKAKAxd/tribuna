@@ -124,7 +124,7 @@ Qué trae gratis el fútbol: ganador, empate, goles, ambos marcan, córners, tar
 Avisa de: ticket ganado o perdido, selección cumplida en combinadas y «a X le faltan 2» (10 en yardas). Cada aviso llega una sola vez.
 
 ### Fútbol (FC)
-- Competiciones: Serie A, LaLiga, Premier, Champions y **Nations League**. En los parones de selecciones cada jugador sale con su selección (y vuelve a su club cuando el club juega antes).
+- Competiciones: Serie A, LaLiga, Premier, Bundesliga, Ligue 1, Championship, MLS, Liga MX, Champions y **Nations League**. En los parones de selecciones cada jugador sale con su selección (y vuelve a su club cuando el club juega antes).
 - Arriba, **FC** en el selector. «Próximos partidos» enseña los de los próximos 7 días con filtro por competición.
 - Datos: `actualizar_futbol.py` a las 09:00 (dentro de `ejecutar_actualizacion.bat`). Cuotas automáticas a las 13:30 y 18:00 (PropLine; SportsGameOdds de respaldo en la Champions); también se pueden pegar a mano en Cuotas (`INT ganador 1,80`, `NAP@INT empate 3,40`, `NAP@INT ambos 1,85 1,95`, `NAP@INT total 2,5 1,90 1,90`, `Lautaro gol 0,5 2,40`, `Lautaro tiros 2,5 1,85 1,95`).
 - El modelo acierta el 1X2 mejor que el azar; en más/menos goles y ambos marcan apenas.
