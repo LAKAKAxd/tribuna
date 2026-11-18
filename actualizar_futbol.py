@@ -1,7 +1,7 @@
 """
 Descarga diaria de fútbol para Tribuna (gratis, sin clave: API pública de ESPN).
 
-Competiciones: Serie A, LaLiga, Premier League, Champions League y Nations League (temporada actual y anterior).
+Competiciones: Serie A, LaLiga, Premier, Bundesliga, Ligue 1, Championship, MLS, Liga MX, Champions y Nations League (temporada actual y anterior).
 Cada jugador guarda su club («team») y, si ha jugado con ella, su selección («nat»).
 Para medir bien a los equipos de Champions de otras ligas se bajan también los resultados
 (sin jugadores) de Bundesliga, Ligue 1, Portugal, Países Bajos, Bélgica, Turquía y Escocia.
@@ -34,9 +34,13 @@ from actualizar_nba import cargar_config
 
 CARPETA = os.path.dirname(os.path.abspath(__file__))
 ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer"
-COMPS = {"ita.1": "Serie A", "esp.1": "LaLiga", "eng.1": "Premier", "uefa.champions": "Champions", "uefa.nations": "Nations League"}
+COMPS = {"ita.1": "Serie A", "esp.1": "LaLiga", "eng.1": "Premier", "ger.1": "Bundesliga", "fra.1": "Ligue 1", "eng.2": "Championship",
+         "usa.1": "MLS", "mex.1": "Liga MX", "uefa.champions": "Champions", "uefa.nations": "Nations League"}
+# Ligas de año natural (de febrero a diciembre): su temporada es el año del partido.
+# shortcut: de enero a junio de 2027 la MLS será «2027», que aún no es la temporada actual (pesa como la anterior) hasta julio.
+AÑO_NATURAL = {"usa.1"}
 # Solo resultados: ligas para medir a los rivales de Champions y partidos de selecciones para medir a las de la Nations League.
-EXTRA = ["ger.1", "fra.1", "por.1", "ned.1", "bel.1", "tur.1", "sco.1", "fifa.worldq.uefa", "fifa.friendly", "fifa.world"]
+EXTRA = ["por.1", "ned.1", "bel.1", "tur.1", "sco.1", "fifa.worldq.uefa", "fifa.friendly", "fifa.world"]
 SELECCIONES = {"uefa.nations", "fifa.worldq.uefa", "fifa.friendly", "fifa.world"}
 CACHE = os.path.join(CARPETA, "futbol_cache.json")
 
@@ -115,7 +119,8 @@ def eventos(slug: str, inicio: int) -> list[dict]:
             if not H or not A:
                 continue
             st = (c.get("status") or ev.get("status") or {}).get("type") or {}
-            out.append({"id": ev["id"], "comp": slug, "season": str(inicio), "start": ev.get("date"),
+            temporada = (ev.get("date") or str(inicio))[:4] if slug in AÑO_NATURAL else str(inicio)
+            out.append({"id": ev["id"], "comp": slug, "season": temporada, "start": ev.get("date"),
                         "state": st.get("state"), "completed": bool(st.get("completed")),
                         "home": H["team"], "away": A["team"],
                         "hs": int(H.get("score") or 0), "as": int(A.get("score") or 0)})
@@ -296,11 +301,30 @@ def subir_a_supabase(datos: dict) -> None:
     url, key = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_SERVICE_KEY")
     if not url or not key:
         sys.exit("Faltan SUPABASE_URL y SUPABASE_SERVICE_KEY.")
-    r = requests.post(f"{url}/rest/v1/snapshots", timeout=120, data=json.dumps({"id": "futbol", "data": datos}, separators=(",", ":")),
-                      headers={"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json",
-                               "Prefer": "resolution=merge-duplicates"})
+    h = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates"}
+    # Con 10 competiciones pasa de 10 MB y Supabase rechaza filas tan grandes: los historiales de jugadores van en
+    # filas aparte («futbol_logs_0», «_1»...) de ~2 MB que la app junta al cargar.
+    ids, partes, actual, tam = sorted(datos["logs"]), [], {}, 0
+    for pid in ids:
+        actual[pid] = datos["logs"][pid]
+        tam += len(json.dumps(actual[pid], separators=(",", ":")))
+        if tam > 2_000_000:
+            partes.append(actual); actual, tam = {}, 0
+    if actual:
+        partes.append(actual)
+    for i, logs in enumerate(partes):
+        r = requests.post(f"{url}/rest/v1/snapshots", timeout=180, headers=h,
+                          data=json.dumps({"id": f"futbol_logs_{i}", "data": {"logs": logs}}, separators=(",", ":")))
+        r.raise_for_status()
+    r = requests.post(f"{url}/rest/v1/snapshots", timeout=180, headers=h,
+                      data=json.dumps({"id": "futbol", "data": {**datos, "logs": {}, "log_parts": len(partes)}}, separators=(",", ":")))
     r.raise_for_status()
-    print("Subido a Supabase.")
+    # partes que sobran de una subida anterior más grande
+    viejas = requests.get(f"{url}/rest/v1/snapshots", timeout=60, headers=h, params={"select": "id", "id": "like.futbol_logs_*"}).json()
+    for v in viejas:
+        if int(v["id"].rsplit("_", 1)[1]) >= len(partes):
+            requests.delete(f"{url}/rest/v1/snapshots", timeout=60, headers=h, params={"id": "eq." + v["id"]})
+    print(f"Subido a Supabase ({len(partes)} partes de historiales).")
 
 
 def main() -> None:

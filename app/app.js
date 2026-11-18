@@ -2098,6 +2098,10 @@ async function bootReal() {
   if (!mem.error && mem.data === false) { app.innerHTML = `<div class="shell">${viewJoin('')}</div>`; return; }
   const [snap, adm] = await Promise.all([sb.from('snapshots').select('data').eq('id', LIGA).maybeSingle(), sb.from('admins').select('email').limit(1)]);
   if (snap.error || !snap.data) { app.innerHTML = `<div class="shell">${topBar('', false)}<div class="card empty" style="margin-top:20vh"><b>Aún no hay datos ${LIGA.toUpperCase()}</b>${esc(snap.error?.message || `Ejecuta actualizar_${LIGA}.py --subir en el ordenador del administrador.`)}</div></div>`; return; }
+  if (SOC && snap.data.data.log_parts) {   // fútbol: los historiales de jugadores vienen en filas aparte (futbol_logs_0, _1...)
+    const parts = await Promise.all(Array.from({ length: snap.data.data.log_parts }, (_, i) => sb.from('snapshots').select('data').eq('id', 'futbol_logs_' + i).maybeSingle()));
+    for (const p of parts) Object.assign(snap.data.data.logs, p.data?.data?.logs || {});
+  }
   D = prepare(snap.data.data); isAdmin = !!adm.data?.length;
   const bj = SOC ? { data: null } : await sb.from('snapshots').select('data').eq('id', NFL ? 'bajas_nfl' : 'bajas').maybeSingle();
   if (bj.data?.data) { BAJAS = bj.data.data.players || {}; BAJAS_AT = bj.data.data.updated || null; }

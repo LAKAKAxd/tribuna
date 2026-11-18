@@ -80,7 +80,8 @@ SI_NO = {"dd", "td", "gol", "ga", "asi", "tar"}   # mercados sí/no: línea 0,5,
 
 # Fútbol (PropLine). Partido: 's_x' = total del partido, 't_x' = de un equipo (como en la app).
 FUT_COMPS = {"ita.1": "soccer_serie_a", "esp.1": "soccer_la_liga", "eng.1": "soccer_epl", "uefa.champions": "soccer_uefa_champions_league",
-             "uefa.nations": "soccer_uefa_nations_league"}
+             "uefa.nations": "soccer_uefa_nations_league", "ger.1": "soccer_bundesliga", "fra.1": "soccer_ligue_1",
+             "eng.2": "soccer_championship", "usa.1": "soccer_mls", "mex.1": "soccer_liga_mx"}
 FUT_PARTIDO = {"total_corners": "s_cor", "team_corners": "t_cor", "total_cards": "s_crd", "team_cards": "t_crd",
                "total_fouls": "s_fc", "team_fouls": "t_fc", "total_offsides": "s_off", "team_offsides": "t_off",
                "total_shots": "s_sh", "team_shots": "t_sh", "total_shots_on_target": "s_sot", "team_shots_on_target": "t_sot"}
