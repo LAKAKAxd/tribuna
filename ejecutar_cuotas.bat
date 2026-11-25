@@ -6,6 +6,14 @@ rem   ejecutar_cuotas.bat --props   21:00  props NBA y NFL de esa noche
 rem   ejecutar_cuotas.bat futbol    13:30  futbol de las proximas 48 h
 rem   ejecutar_cuotas.bat nfl       domingo 17:45  NFL de la jornada (tras los inactivos)
 cd /d "%~dp0"
+rem Al encender el PC las tareas atrasadas arrancan antes de que haya internet: se espera hasta 5 minutos.
+set /a intentos=0
+:esperar_red
+powershell -NoProfile -Command "try{[Net.Dns]::GetHostEntry('site.api.espn.com')|Out-Null;exit 0}catch{exit 1}" >nul 2>&1 && goto red_ok
+set /a intentos+=1
+if %intentos% lss 30 (timeout /t 10 /nobreak >nul & goto esperar_red)
+echo Sin internet tras 5 minutos >> cuotas.log
+:red_ok
 echo ==== %date% %time% %* ==== >> cuotas.log
 if "%~1"=="futbol" (
   py actualizar_cuotas.py --liga futbol >> cuotas.log 2>&1

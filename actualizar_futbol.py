@@ -302,6 +302,15 @@ def subir_a_supabase(datos: dict) -> None:
     if not url or not key:
         sys.exit("Faltan SUPABASE_URL y SUPABASE_SERVICE_KEY.")
     h = {"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates"}
+
+    def post(datos_fila):   # Supabase a veces da 500 con filas grandes: se reintenta
+        for i in range(3):
+            r = requests.post(f"{url}/rest/v1/snapshots", timeout=180, headers=h, data=json.dumps(datos_fila, separators=(",", ":")))
+            if r.status_code < 500 or i == 2:
+                r.raise_for_status()
+                return
+            print(f"  Supabase {r.status_code}; reintento {i + 1}…")
+            time.sleep(15)
     # Con 10 competiciones pasa de 10 MB y Supabase rechaza filas tan grandes: los historiales de jugadores van en
     # filas aparte («futbol_logs_0», «_1»...) de ~2 MB que la app junta al cargar.
     ids, partes, actual, tam = sorted(datos["logs"]), [], {}, 0
@@ -313,12 +322,8 @@ def subir_a_supabase(datos: dict) -> None:
     if actual:
         partes.append(actual)
     for i, logs in enumerate(partes):
-        r = requests.post(f"{url}/rest/v1/snapshots", timeout=180, headers=h,
-                          data=json.dumps({"id": f"futbol_logs_{i}", "data": {"logs": logs}}, separators=(",", ":")))
-        r.raise_for_status()
-    r = requests.post(f"{url}/rest/v1/snapshots", timeout=180, headers=h,
-                      data=json.dumps({"id": "futbol", "data": {**datos, "logs": {}, "log_parts": len(partes)}}, separators=(",", ":")))
-    r.raise_for_status()
+        post({"id": f"futbol_logs_{i}", "data": {"logs": logs}})
+    post({"id": "futbol", "data": {**datos, "logs": {}, "log_parts": len(partes)}})
     # partes que sobran de una subida anterior más grande
     viejas = requests.get(f"{url}/rest/v1/snapshots", timeout=60, headers=h, params={"select": "id", "id": "like.futbol_logs_*"}).json()
     for v in viejas:
