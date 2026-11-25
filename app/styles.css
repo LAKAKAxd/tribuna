@@ -495,3 +495,7 @@ table.box th,table.box td{padding:6px 7px}
 .h2h{list-style:none;margin:8px 0 0;padding:0}
 .h2h li{display:flex;flex-direction:column;gap:2px;padding:7px 0;border-top:1px solid var(--line)}
 .h2h-s b{margin:0 4px}
+
+/* valor muy alto: el usuario debe revisarla */
+.xs.acc,.pc-num b.acc{color:var(--acc)}
+.note.rev{color:var(--acc);margin:0}

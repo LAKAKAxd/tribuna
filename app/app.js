@@ -309,7 +309,13 @@ const sideP = (h, side) => h.p == null ? null : side === 'over' ? h.p : 1 - h.p;
 /* El valor se muestra sin redondear hacia arriba: +2,6 sale "+2" y es "Justo"; "Con valor" empieza en +3. */
 const edgeTxt = e => { const t = Math.trunc(e); return (t > 0 ? '+' : '') + t; };
 const hasValue = e => e != null && e >= 3;
-function verdict(edge) { if (edge == null) return ''; const c = edge >= 3 ? 'good' : edge <= -3 ? 'bad' : ''; return `<span class="pill ${c}">${edge >= 3 ? 'Con valor' : edge <= -3 ? 'Sin valor' : 'Justo'} ${edgeTxt(edge)}</span>`; }
+/* Desde +8 el modelo y la cuota se separan tanto que lo normal es que al modelo le falte algo: el usuario debe revisarla. */
+const REVISAR = 8;
+const REVISAR_TXT = 'El modelo y la cuota se separan mucho: suele faltarle algo al modelo (bajas, rotaciones, noticias). Revisa el historial y las bajas antes de apostar.';
+function verdict(edge) { if (edge == null) return ''; if (edge >= REVISAR) return `<span class="pill acc" title="${REVISAR_TXT}">Revisar ${edgeTxt(edge)}</span>`; const c = edge >= 3 ? 'good' : edge <= -3 ? 'bad' : ''; return `<span class="pill ${c}">${edge >= 3 ? 'Con valor' : edge <= -3 ? 'Sin valor' : 'Justo'} ${edgeTxt(edge)}</span>`; }
+const revNote = e => e != null && e >= REVISAR ? `<div class="note rev">${REVISAR_TXT}</div>` : '';
+const valCls = e => e >= REVISAR ? 'acc' : e >= 3 ? 'ok' : e <= -3 ? 'err' : 'mut';
+const valTxt = e => e == null ? '–' : e >= REVISAR ? edgeTxt(e) + ' · revisar' : edgeTxt(e) + ' valor';
 
 /* ---------- equipos y partidos ---------- */
 function tGames(t, venue = 'all') { return (D.teams[t] || []).filter(g => venue === 'all' || (venue === 'home') === g.home); }
@@ -780,11 +786,12 @@ function gameSection(g, md) {
   return `<section class="stack">
     <div class="sec-h"><h3>Ganador</h3><span class="note">${SOC ? `Modelo: goles esperados ${g.home} ${dec(md.eh, 2)} · ${g.away} ${dec(md.ea, 2)}` : `Modelo: ${g.home} ${md.m >= 0 ? 'por' : 'pierde por'} ${dec(Math.abs(md.m))} · ${dec(md.eh, 0)}-${dec(md.ea, 0)}${md.lh + md.la >= .5 ? ' · con bajas' : ''}`}</span></div>
     <div class="ml2${SOC ? ' three' : ''}">${SOC ? `<button class="mlb draw" data-market="draw" aria-pressed="${S.market === 'draw'}"><div class="mlt"><b>Empate</b></div><div class="odd">${drawEv.eo.v ? dec(drawEv.eo.v, 2) : '–'}</div><div class="xs mut">Modelo <b>${pct(drawEv.pModel)}</b>${drawEv.imp != null ? `<br>La cuota le da ${pct(drawEv.imp)}` : ''}</div>${verdict(drawEv.edge)}</button>` : ''}${evs.map(({ tm: x, ev }) => `<button class="mlb" data-mteam="${x === g.home ? 'home' : 'away'}" aria-pressed="${x === tm}">
-      ${x === best && (ev.edge == null || hasValue(ev.edge)) ? `<span class="best">${ev.edge != null ? 'La que más conviene' : 'Favorito del modelo'}</span>` : ''}
+      ${x === best && (ev.edge == null || hasValue(ev.edge)) ? `<span class="best">${ev.edge != null ? (ev.edge >= REVISAR ? 'Revísala' : 'La que más conviene') : 'Favorito del modelo'}</span>` : ''}
       <div class="mlt">${V.crest(x, 30, 'sm')}<b>${x}</b></div>
       <div class="odd">${ev.eo.v ? dec(ev.eo.v, 2) : '–'}</div>
       <div class="xs mut">Modelo <b class="${ev.pModel >= .5 ? 'hi' : ''}">${pct(ev.pModel)}</b>${ev.imp != null ? `<br>La cuota le da ${pct(ev.imp)}` : ''}</div>
       ${verdict(ev.edge)}</button>`).join('')}</div>
+    ${revNote(Math.max(...evs.map(x => x.ev.edge ?? -99), drawEv?.edge ?? -99))}
     <div class="card">
       <div class="pick" style="padding-bottom:6px"><div><div class="big">Historial de ${tm}</div><div class="sm mut">${wins}-${series.length - wins} en este tramo · ${series.length ? signed(mean(series.map(x => x.margin))) + ' de diferencia media' : ''}</div></div></div>
       <div class="pick" style="padding-top:0">
@@ -854,7 +861,7 @@ function marketCard(g) {
         ${S.market === 'draw' || S.market === 'btts' ? '' : `<div class="ctl"><button class="ic" data-gstep="-0.5" aria-label="Bajar línea">−</button><input id="gline" type="number" step="0.5" value="${line}" inputmode="decimal" aria-label="Línea"><button class="ic" data-gstep="0.5" aria-label="Subir línea">+</button></div>`}
         <div class="ctl"><span class="mut sm">Cuota</span><input id="godd" type="number" step="0.01" min="1.01" placeholder="1,90" value="${ev.eo.v ?? ''}" inputmode="decimal" aria-label="Cuota"></div>
       </div>
-      <div class="pick" style="padding-top:0"><div class="big">${esc(marketLabel(g, S.market, team, side, line))}${ev.eo.v ? ` <span class="mut">· ${dec(ev.eo.v, 2)}</span>` : ''}</div>${verdict(ev.edge)}</div>
+      <div class="pick" style="padding-top:0"><div class="big">${esc(marketLabel(g, S.market, team, side, line))}${ev.eo.v ? ` <span class="mut">· ${dec(ev.eo.v, 2)}</span>` : ''}</div>${verdict(ev.edge)}</div>${revNote(ev.edge) ? `<div class="pad" style="padding-top:0">${revNote(ev.edge)}</div>` : ''}
       <div class="pick" style="padding-top:0"><span class="sm mut">Modelo <b class="hi">${pct(ev.pModel)}</b> · Histórico ${S.gwin.toUpperCase()} <b>${pct(h.p)}</b> (${h.o}/${h.n})${ev.imp != null ? ` · La cuota le da <b>${pct(ev.imp)}</b>` : ' · Escribe una cuota para ver el valor'}</span>
         ${ev.eo.src === 'tuya' ? `<button class="linkb" data-act="reset-godd">Usar la cuota de hoy</button>` : ''}${uLines[ev.key] != null ? `<button class="linkb" data-act="reset-gline">Línea de hoy</button>` : ''}
         <button class="btn ghost" data-act="add-game" style="margin-left:auto">+ Combinada</button></div>
@@ -894,7 +901,7 @@ function teamSection(g, tm) {
         <div class="pc-name"><div class="nm">${esc(r.p.name)} <span class="mut xs">${r.p.team} · ${r.p.pos}</span>${bajaOf(r.p.id) ? ` <span class="pill ${bajaOf(r.p.id).status === 'out' ? 'bad' : 'acc'}" style="padding:1px 6px">${BAJA_N[bajaOf(r.p.id).status]}</span>` : ''}</div>
           <div class="pc-line"><span class="sd ${r.side}">${r.side === 'over' ? 'Más' : 'Menos'}</span> ${yes ? SK[k].n : `${dec(r.line)} ${esc(SK[k].short || SK[k].n)}`}</div></div>
         <div class="pc-num"><small>Cuota</small><b>${r.eo.v ? dec(r.eo.v, 2) : '–'}</b></div>
-        <div class="pc-num"><small>Valor</small><b class="${r.edge >= 3 ? 'ok' : r.edge <= -3 ? 'err' : ''}">${r.edge != null ? edgeTxt(r.edge) : '–'}</b></div></div>
+        <div class="pc-num"><small>Valor</small><b class="${valCls(r.edge)}">${r.edge != null ? edgeTxt(r.edge) : '–'}</b></div></div>
       <div class="tiles">${PER.map(([w, l]) => w === 'dvp'
         ? `<div class="${S.twin === w ? 'on ' : ''}${r.per.dvp.score >= .66 ? 'good' : r.per.dvp.score <= .33 ? 'bad' : ''}"><small>${l}</small><b>${r.per.dvp.rk ? r.per.dvp.rk + '.º' : '–'}</b></div>`
         : `<div class="${S.twin === w ? 'on ' : ''}${tone(r.per[w].p)}"><small>${l}</small><b>${r.per[w].n ? pct(r.per[w].p).replace('\u00a0', '') : '–'}</b></div>`).join('')}</div>
@@ -941,7 +948,7 @@ function viewPlayer() {
         <div class="ctl"><button class="ic" data-step="-0.5" aria-label="Bajar línea">−</button><input id="pline" type="number" step="0.5" min="0" value="${line}" inputmode="decimal" aria-label="Línea"><button class="ic" data-step="0.5" aria-label="Subir línea">+</button></div>
         <div class="ctl"><span class="mut sm">Cuota</span><input id="podd" type="number" step="0.01" min="1.01" placeholder="1,85" value="${eo.v ?? ''}" inputmode="decimal" aria-label="Cuota"></div>
       </div>
-      <div class="pick" style="padding-top:0"><div class="big">${side === 'over' ? 'Más' : 'Menos'} de ${dec(line)} <span class="mut" style="font-weight:600;font-size:15px">${esc(SK[k].n.toLowerCase())}</span></div>${verdict(edge)}</div>
+      <div class="pick" style="padding-top:0"><div class="big">${side === 'over' ? 'Más' : 'Menos'} de ${dec(line)} <span class="mut" style="font-weight:600;font-size:15px">${esc(SK[k].n.toLowerCase())}</span></div>${verdict(edge)}</div>${revNote(edge) ? `<div class="pad" style="padding-top:0">${revNote(edge)}</div>` : ''}
       <div class="pick" style="padding-top:0"><span class="sm mut">${o ? `Línea de hoy ${dec(o.line)}${o.over ? ' · más ' + dec(o.over, 2) : ''}${o.under ? ' · menos ' + dec(o.under, 2) : ''}` : 'Sin cuota cargada hoy: línea = mediana de L20'}${imp != null ? ` · La cuota le da <b>${pct(imp)}</b>, el modelo <b>${pct(pm)}</b> (este tramo ${pct(ph)})` : ''}</span>
         ${uLines[key] != null ? `<button class="linkb" data-act="reset-line">Usar la línea de hoy (${dec(autoLine(p, k))})</button>` : ''}${eo.src === 'tuya' ? `<button class="linkb" data-act="reset-odd">Usar la cuota de hoy</button>` : ''}
         <button class="btn ghost" data-act="add-player" style="margin-left:auto">+ Combinada</button></div>
@@ -1005,7 +1012,7 @@ function viewProps() {
   const star = r => `<button class="fav" data-fav="${esc(keyOf(r))}" aria-pressed="${fav.has(keyOf(r))}" aria-label="Favorita" title="Favorita">★</button>`;
   const statChips = LG.listStats;
   return `${topBar('', false)}<div class="stack fade">
-    <div><h1>${NFL ? 'Props de la semana' : 'Props de esta noche'}</h1><div class="mut sm">Ordenadas por valor frente a las cuotas cargadas hoy</div></div>
+    <div><h1>${NFL ? 'Props de la semana' : 'Props de esta noche'}</h1><div class="mut sm">Ordenadas por valor frente a las cuotas cargadas hoy. Desde +8 salen como «revisar»: mira bajas e historial antes de apostar.</div></div>
     <div class="row-between" style="flex-wrap:wrap"><div class="seg" role="group" aria-label="Tipo">${[['players', 'Jugadores'], ['games', 'Partidos']].map(([v, l]) => `<button data-ltab="${v}" aria-pressed="${S.listTab === v}">${l}</button>`).join('')}</div>
       ${S.listTab === 'players' ? `<div class="seg" role="group" aria-label="Tramo">${[['l5', 'L5'], ['l10', 'L10'], ['l20', 'L20'], ['cur', D.cur.slice(2)]].map(([v, l]) => `<button data-lwin="${v}" aria-pressed="${S.listWin === v}">${l}</button>`).join('')}</div>` : '<span class="note">Valor frente al modelo</span>'}</div>
     ${S.listTab === 'players' ? `<div class="chips">${statChips.map(s => `<button class="chip acc" data-lstat="${s}" aria-pressed="${S.listStat === s}">${s === 'all' ? 'Todas' : SK[s].l}</button>`).join('')}</div>` : ''}
@@ -1016,10 +1023,10 @@ function viewProps() {
         ${CFG.fotosOficiales ? avatar(r.p, 44) : V.crest(r.p.team, 30, 'sm')}
         <div style="min-width:0"><div class="nm">${esc(r.p.name)}</div><div class="mut xs"><span class="sd ${r.b.side}">${r.b.side === 'over' ? 'Más' : 'Menos'}</span> ${dec(r.line)} ${SK[r.k].l}${r.b.eo.v ? ' · ' + dec(r.b.eo.v, 2) : ''}</div></div>
         <div class="sp">${spark(r.spark, r.line, r.b.side)}<div class="xs mut">${(() => { const v = r.spark, ok = v.filter(x => r.b.side === 'under' ? x < r.line : x > r.line).length; return `${ok}/${v.length} últimos`; })()}</div></div>
-        <div class="rt"><div class="pc ${r.b.p >= .6 ? 'hi' : ''}">${pct(r.b.p)}</div><div class="xs ${r.b.edge >= 3 ? 'ok' : r.b.edge <= -3 ? 'err' : 'mut'}">${r.b.edge != null ? edgeTxt(r.b.edge) + ' valor' : '–'}</div></div>
+        <div class="rt"><div class="pc ${r.b.p >= .6 ? 'hi' : ''}">${pct(r.b.p)}</div><div class="xs ${valCls(r.b.edge)}">${valTxt(r.b.edge)}</div></div>
         </button>${star(r)}</div>` : `<div class="prow-w"><button class="prow" data-open-g="${esc(r.g.id)}" data-open-m="${r.m}" data-open-t="${r.tm === r.g.home ? 'home' : 'away'}">
         <div style="min-width:0"><div class="nm">${esc(marketLabel(r.g, r.m, r.tm, r.side, r.line))}</div><div class="mut xs">${r.g.away} @ ${r.g.home} · ${MARKET_N[r.m]}${r.ev.eo.v ? ' · ' + dec(r.ev.eo.v, 2) : ''}</div></div>
-        <div class="rt"><div class="pc ${r.ev.pModel >= .6 ? 'hi' : ''}">${pct(r.ev.pModel)}</div><div class="xs ${r.ev.edge >= 3 ? 'ok' : r.ev.edge <= -3 ? 'err' : 'mut'}">${r.ev.edge != null ? edgeTxt(r.ev.edge) + ' valor' : '–'}</div></div></button>${star(r)}</div>`).join('')
+        <div class="rt"><div class="pc ${r.ev.pModel >= .6 ? 'hi' : ''}">${pct(r.ev.pModel)}</div><div class="xs ${valCls(r.ev.edge)}">${valTxt(r.ev.edge)}</div></div></button>${star(r)}</div>`).join('')
       : all.length ? `<div class="empty"><b>Ninguna con estos filtros</b>Quita alguno para ver más.</div>` : `<div class="empty"><b>Aún no hay cuotas cargadas hoy</b>${isAdmin ? 'Cárgalas en la pestaña Cuotas.' : 'El administrador las cargará antes de los partidos.'}</div>`}</div>
     ${legal()}</div>`;
 }
