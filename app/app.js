@@ -309,13 +309,27 @@ const sideP = (h, side) => h.p == null ? null : side === 'over' ? h.p : 1 - h.p;
 /* El valor se muestra sin redondear hacia arriba: +2,6 sale "+2" y es "Justo"; "Con valor" empieza en +3. */
 const edgeTxt = e => { const t = Math.trunc(e); return (t > 0 ? '+' : '') + t; };
 const hasValue = e => e != null && e >= 3;
-/* Desde +8 el modelo y la cuota se separan tanto que lo normal es que al modelo le falte algo: el usuario debe revisarla. */
+/* Desde +8 el modelo y la cuota se separan tanto que lo normal es que al modelo le falte algo: la app la comprueba sola.
+   Se descarta si el jugador está en el parte de lesiones o si en sus últimos 10 partidos no se cumplió tanto como
+   pide la cuota; si pasa las dos cosas sale «comprobada». */
 const REVISAR = 8;
-const REVISAR_TXT = 'El modelo y la cuota se separan mucho: suele faltarle algo al modelo (bajas, rotaciones, noticias). Revisa el historial y las bajas antes de apostar.';
-function verdict(edge) { if (edge == null) return ''; if (edge >= REVISAR) return `<span class="pill acc" title="${REVISAR_TXT}">Revisar ${edgeTxt(edge)}</span>`; const c = edge >= 3 ? 'good' : edge <= -3 ? 'bad' : ''; return `<span class="pill ${c}">${edge >= 3 ? 'Con valor' : edge <= -3 ? 'Sin valor' : 'Justo'} ${edgeTxt(edge)}</span>`; }
-const revNote = e => e != null && e >= REVISAR ? `<div class="note rev">${REVISAR_TXT}</div>` : '';
-const valCls = e => e >= REVISAR ? 'acc' : e >= 3 ? 'ok' : e <= -3 ? 'err' : 'mut';
-const valTxt = e => e == null ? '–' : e >= REVISAR ? edgeTxt(e) + ' · revisar' : edgeTxt(e) + ' valor';
+function revisa(edge, imp, histP, pid) {
+  if (edge == null || edge < REVISAR) return { edge, chk: null };
+  const b = pid && bajaOf(pid);
+  if (b && BAJA_W[b.status] > 0) return { edge: null, chk: 'baja', raw: edge };
+  if (histP != null && imp != null && histP < imp) return { edge: null, chk: 'hist', raw: edge };
+  return { edge, chk: 'ok' };
+}
+const l10P = (p, k, line, side) => sideP(hit(windowGames(p, 'l10', p.log), k, line), side);
+const CHK_N = { baja: 'Descartada: está en el parte de lesiones', hist: 'Descartada: su historial no la respalda' };
+function verdict(edge, chk) {
+  if (CHK_N[chk]) return `<span class="pill">${CHK_N[chk]}</span>`;
+  if (edge == null) return '';
+  const c = edge >= 3 ? 'good' : edge <= -3 ? 'bad' : '';
+  return `<span class="pill ${c}">${edge >= 3 ? 'Con valor' : edge <= -3 ? 'Sin valor' : 'Justo'} ${edgeTxt(edge)}${chk === 'ok' ? ' · comprobada' : ''}</span>`;
+}
+const valCls = e => e >= 3 ? 'ok' : e <= -3 ? 'err' : 'mut';
+const valTxt = (e, chk) => CHK_N[chk] ? 'descartada' : e == null ? '–' : edgeTxt(e) + (chk === 'ok' ? ' valor ✓' : ' valor');
 
 /* ---------- equipos y partidos ---------- */
 function tGames(t, venue = 'all') { return (D.teams[t] || []).filter(g => venue === 'all' || (venue === 'home') === g.home); }
@@ -528,7 +542,8 @@ function marketEval(g, market, team, side, line) {
     else if (market === 'spread') imp = 1 / eo.v;
     else imp = impliedProb(key, odSide, eo);
   }
-  return { pModel, hist, key, eo, imp, edge: edgeOf(pModel, imp), histVal, thr, sMd };
+  const rv = revisa(edgeOf(pModel, imp), imp, hist(10).p);
+  return { pModel, hist, key, eo, imp, edge: rv.edge, chk: rv.chk, histVal, thr, sMd };
 }
 function marketLabel(g, market, team, side, line) {
   if (market === 'ml') return `Gana ${team}`;
@@ -785,13 +800,12 @@ function gameSection(g, md) {
   const drawEv = SOC ? marketEval(g, 'draw', null, 'over', .5) : null;
   return `<section class="stack">
     <div class="sec-h"><h3>Ganador</h3><span class="note">${SOC ? `Modelo: goles esperados ${g.home} ${dec(md.eh, 2)} · ${g.away} ${dec(md.ea, 2)}` : `Modelo: ${g.home} ${md.m >= 0 ? 'por' : 'pierde por'} ${dec(Math.abs(md.m))} · ${dec(md.eh, 0)}-${dec(md.ea, 0)}${md.lh + md.la >= .5 ? ' · con bajas' : ''}`}</span></div>
-    <div class="ml2${SOC ? ' three' : ''}">${SOC ? `<button class="mlb draw" data-market="draw" aria-pressed="${S.market === 'draw'}"><div class="mlt"><b>Empate</b></div><div class="odd">${drawEv.eo.v ? dec(drawEv.eo.v, 2) : '–'}</div><div class="xs mut">Modelo <b>${pct(drawEv.pModel)}</b>${drawEv.imp != null ? `<br>La cuota le da ${pct(drawEv.imp)}` : ''}</div>${verdict(drawEv.edge)}</button>` : ''}${evs.map(({ tm: x, ev }) => `<button class="mlb" data-mteam="${x === g.home ? 'home' : 'away'}" aria-pressed="${x === tm}">
-      ${x === best && (ev.edge == null || hasValue(ev.edge)) ? `<span class="best">${ev.edge != null ? (ev.edge >= REVISAR ? 'Revísala' : 'La que más conviene') : 'Favorito del modelo'}</span>` : ''}
+    <div class="ml2${SOC ? ' three' : ''}">${SOC ? `<button class="mlb draw" data-market="draw" aria-pressed="${S.market === 'draw'}"><div class="mlt"><b>Empate</b></div><div class="odd">${drawEv.eo.v ? dec(drawEv.eo.v, 2) : '–'}</div><div class="xs mut">Modelo <b>${pct(drawEv.pModel)}</b>${drawEv.imp != null ? `<br>La cuota le da ${pct(drawEv.imp)}` : ''}</div>${verdict(drawEv.edge, drawEv.chk)}</button>` : ''}${evs.map(({ tm: x, ev }) => `<button class="mlb" data-mteam="${x === g.home ? 'home' : 'away'}" aria-pressed="${x === tm}">
+      ${x === best && (ev.edge == null || hasValue(ev.edge)) ? `<span class="best">${ev.edge != null ? 'La que más conviene' : 'Favorito del modelo'}</span>` : ''}
       <div class="mlt">${V.crest(x, 30, 'sm')}<b>${x}</b></div>
       <div class="odd">${ev.eo.v ? dec(ev.eo.v, 2) : '–'}</div>
       <div class="xs mut">Modelo <b class="${ev.pModel >= .5 ? 'hi' : ''}">${pct(ev.pModel)}</b>${ev.imp != null ? `<br>La cuota le da ${pct(ev.imp)}` : ''}</div>
-      ${verdict(ev.edge)}</button>`).join('')}</div>
-    ${revNote(Math.max(...evs.map(x => x.ev.edge ?? -99), drawEv?.edge ?? -99))}
+      ${verdict(ev.edge, ev.chk)}</button>`).join('')}</div>
     <div class="card">
       <div class="pick" style="padding-bottom:6px"><div><div class="big">Historial de ${tm}</div><div class="sm mut">${wins}-${series.length - wins} en este tramo · ${series.length ? signed(mean(series.map(x => x.margin))) + ' de diferencia media' : ''}</div></div></div>
       <div class="pick" style="padding-top:0">
@@ -861,7 +875,7 @@ function marketCard(g) {
         ${S.market === 'draw' || S.market === 'btts' ? '' : `<div class="ctl"><button class="ic" data-gstep="-0.5" aria-label="Bajar línea">−</button><input id="gline" type="number" step="0.5" value="${line}" inputmode="decimal" aria-label="Línea"><button class="ic" data-gstep="0.5" aria-label="Subir línea">+</button></div>`}
         <div class="ctl"><span class="mut sm">Cuota</span><input id="godd" type="number" step="0.01" min="1.01" placeholder="1,90" value="${ev.eo.v ?? ''}" inputmode="decimal" aria-label="Cuota"></div>
       </div>
-      <div class="pick" style="padding-top:0"><div class="big">${esc(marketLabel(g, S.market, team, side, line))}${ev.eo.v ? ` <span class="mut">· ${dec(ev.eo.v, 2)}</span>` : ''}</div>${verdict(ev.edge)}</div>${revNote(ev.edge) ? `<div class="pad" style="padding-top:0">${revNote(ev.edge)}</div>` : ''}
+      <div class="pick" style="padding-top:0"><div class="big">${esc(marketLabel(g, S.market, team, side, line))}${ev.eo.v ? ` <span class="mut">· ${dec(ev.eo.v, 2)}</span>` : ''}</div>${verdict(ev.edge, ev.chk)}</div>
       <div class="pick" style="padding-top:0"><span class="sm mut">Modelo <b class="hi">${pct(ev.pModel)}</b> · Histórico ${S.gwin.toUpperCase()} <b>${pct(h.p)}</b> (${h.o}/${h.n})${ev.imp != null ? ` · La cuota le da <b>${pct(ev.imp)}</b>` : ' · Escribe una cuota para ver el valor'}</span>
         ${ev.eo.src === 'tuya' ? `<button class="linkb" data-act="reset-godd">Usar la cuota de hoy</button>` : ''}${uLines[ev.key] != null ? `<button class="linkb" data-act="reset-gline">Línea de hoy</button>` : ''}
         <button class="btn ghost" data-act="add-game" style="margin-left:auto">+ Combinada</button></div>
@@ -882,9 +896,9 @@ function teamSection(g, tm) {
     const hw = w => hit(windowGames(p, w, p.log), k, line);
     const l10 = hw('l10');
     let side, edge = null, eo = { v: null };
-    if (ODDS[key] && !yes) { const b = bestSide(propProb(p, k, line), key, line); side = b.side; edge = b.edge; eo = b.eo; }
+    if (ODDS[key] && !yes) { const b = bestSide(propProb(p, k, line), key, line, p, k); side = b.side; edge = b.edge; eo = b.eo; }
     else side = yes ? 'over' : (propProb(p, k, line) ?? .5) >= .5 ? 'over' : 'under';
-    if (yes && ODDS[key]) { eo = effOdd(key, 'over', line); edge = edgeOf(propProb(p, k, line), impliedProb(key, 'over', eo)); }
+    if (yes && ODDS[key]) { eo = effOdd(key, 'over', line); const imp = impliedProb(key, 'over', eo); edge = revisa(edgeOf(propProb(p, k, line), imp), imp, l10P(p, k, line, 'over'), p.id).edge; }
     const per = {}; for (const [w] of PER) if (w !== 'dvp') { const h = hw(w); per[w] = { p: sideP(h, side), n: h.n }; }
     const rk = defRank(opp, p.pos, SK[k].base || k);
     per.dvp = { rk, score: rk == null ? 0 : side === 'over' ? rk / LG.nTeams : 1 - rk / LG.nTeams };
@@ -930,7 +944,7 @@ function viewPlayer() {
   const p = D.players[S.pid]; if (!p) { S.view = 'hoy'; return viewHoy(); }
   const k = S.stat, key = lineKey(p.id, k), line = getLine(p, k), side = getSide(key), opp = oppOf(p.team), g = gameOfTeam(p.team);
   const base = filtered(p), games = windowGames(p, S.win, base), vals = games.map(x => val(x, k)), h = hit(games, k, line), ph = sideP(h, side);
-  const eo = effOdd(key, side, line), imp = impliedProb(key, side, eo), pm = propProb(p, k, line, side), edge = edgeOf(pm, imp);
+  const eo = effOdd(key, side, line), imp = impliedProb(key, side, eo), pm = propProb(p, k, line, side), { edge, chk } = revisa(edgeOf(pm, imp), imp, l10P(p, k, line, side), p.id);
   const defR = opp ? defRank(opp, p.pos, SK[k].base || k) : null;
   const gradeL = (() => { const s = (sideP(hit(windowGames(p, 'l10'), k, line), side) ?? .5) * .65 + ((defR || LG.nTeams / 2) / LG.nTeams) * .35; return ['D', 'C-', 'C', 'C+', 'B-', 'B', 'B+', 'A-', 'A', 'A+'][Math.max(0, Math.min(9, Math.floor(s * 10)))]; })();
   const o = ODDS[key], t = g ? etToRome(g.date, g.status) : null;
@@ -948,7 +962,7 @@ function viewPlayer() {
         <div class="ctl"><button class="ic" data-step="-0.5" aria-label="Bajar línea">−</button><input id="pline" type="number" step="0.5" min="0" value="${line}" inputmode="decimal" aria-label="Línea"><button class="ic" data-step="0.5" aria-label="Subir línea">+</button></div>
         <div class="ctl"><span class="mut sm">Cuota</span><input id="podd" type="number" step="0.01" min="1.01" placeholder="1,85" value="${eo.v ?? ''}" inputmode="decimal" aria-label="Cuota"></div>
       </div>
-      <div class="pick" style="padding-top:0"><div class="big">${side === 'over' ? 'Más' : 'Menos'} de ${dec(line)} <span class="mut" style="font-weight:600;font-size:15px">${esc(SK[k].n.toLowerCase())}</span></div>${verdict(edge)}</div>${revNote(edge) ? `<div class="pad" style="padding-top:0">${revNote(edge)}</div>` : ''}
+      <div class="pick" style="padding-top:0"><div class="big">${side === 'over' ? 'Más' : 'Menos'} de ${dec(line)} <span class="mut" style="font-weight:600;font-size:15px">${esc(SK[k].n.toLowerCase())}</span></div>${verdict(edge, chk)}</div>
       <div class="pick" style="padding-top:0"><span class="sm mut">${o ? `Línea de hoy ${dec(o.line)}${o.over ? ' · más ' + dec(o.over, 2) : ''}${o.under ? ' · menos ' + dec(o.under, 2) : ''}` : 'Sin cuota cargada hoy: línea = mediana de L20'}${imp != null ? ` · La cuota le da <b>${pct(imp)}</b>, el modelo <b>${pct(pm)}</b> (este tramo ${pct(ph)})` : ''}</span>
         ${uLines[key] != null ? `<button class="linkb" data-act="reset-line">Usar la línea de hoy (${dec(autoLine(p, k))})</button>` : ''}${eo.src === 'tuya' ? `<button class="linkb" data-act="reset-odd">Usar la cuota de hoy</button>` : ''}
         <button class="btn ghost" data-act="add-player" style="margin-left:auto">+ Combinada</button></div>
@@ -971,14 +985,14 @@ function viewPlayer() {
 }
 
 /* ---------- vista: props ---------- */
-function bestSide(hp, key, line) {
+function bestSide(hp, key, line, pl, k) {
   let best = null;
   for (const side of ['over', 'under']) {
     const eo = effOdd(key, side, line); const imp = impliedProb(key, side, eo); const p = side === 'over' ? hp : hp == null ? null : 1 - hp;
     const edge = edgeOf(p, imp);
     if (!best || (edge ?? -999) > (best.edge ?? -999)) best = { side, eo, imp, p, edge };
   }
-  return best;
+  return pl ? { ...best, ...revisa(best.edge, best.imp, l10P(pl, k, line, best.side), pl.id) } : best;
 }
 function propRows(tab, stat, win) {
   const playing = new Set(D.games.flatMap(g => [g.home, g.away]));
@@ -987,7 +1001,7 @@ function propRows(tab, stat, win) {
     for (const [key, o] of Object.entries(ODDS)) {
       const [pid, k] = key.split('|'); const p = D.players[pid]; if (!p || !SK[k] || !playing.has(p.team)) continue;
       if (stat !== 'all' && stat !== k) continue;
-      const g = windowGames(p, win, p.log), line = getLine(p, k), h = hit(g, k, line), b = bestSide(propProb(p, k, line), key, line);
+      const g = windowGames(p, win, p.log), line = getLine(p, k), h = hit(g, k, line), b = bestSide(propProb(p, k, line), key, line, p, k);
       rows.push({ type: 'p', p, k, line, h, b, spark: g.slice(-10).map(x => val(x, k)) });
     }
   } else {
@@ -1012,7 +1026,7 @@ function viewProps() {
   const star = r => `<button class="fav" data-fav="${esc(keyOf(r))}" aria-pressed="${fav.has(keyOf(r))}" aria-label="Favorita" title="Favorita">★</button>`;
   const statChips = LG.listStats;
   return `${topBar('', false)}<div class="stack fade">
-    <div><h1>${NFL ? 'Props de la semana' : 'Props de esta noche'}</h1><div class="mut sm">Ordenadas por valor frente a las cuotas cargadas hoy. Desde +8 salen como «revisar»: mira bajas e historial antes de apostar.</div></div>
+    <div><h1>${NFL ? 'Props de la semana' : 'Props de esta noche'}</h1><div class="mut sm">Ordenadas por valor frente a las cuotas cargadas hoy. Las de +8 o más la app las comprueba sola (lesiones y últimos 10 partidos): ✓ = comprobada.</div></div>
     <div class="row-between" style="flex-wrap:wrap"><div class="seg" role="group" aria-label="Tipo">${[['players', 'Jugadores'], ['games', 'Partidos']].map(([v, l]) => `<button data-ltab="${v}" aria-pressed="${S.listTab === v}">${l}</button>`).join('')}</div>
       ${S.listTab === 'players' ? `<div class="seg" role="group" aria-label="Tramo">${[['l5', 'L5'], ['l10', 'L10'], ['l20', 'L20'], ['cur', D.cur.slice(2)]].map(([v, l]) => `<button data-lwin="${v}" aria-pressed="${S.listWin === v}">${l}</button>`).join('')}</div>` : '<span class="note">Valor frente al modelo</span>'}</div>
     ${S.listTab === 'players' ? `<div class="chips">${statChips.map(s => `<button class="chip acc" data-lstat="${s}" aria-pressed="${S.listStat === s}">${s === 'all' ? 'Todas' : SK[s].l}</button>`).join('')}</div>` : ''}
@@ -1023,10 +1037,10 @@ function viewProps() {
         ${CFG.fotosOficiales ? avatar(r.p, 44) : V.crest(r.p.team, 30, 'sm')}
         <div style="min-width:0"><div class="nm">${esc(r.p.name)}</div><div class="mut xs"><span class="sd ${r.b.side}">${r.b.side === 'over' ? 'Más' : 'Menos'}</span> ${dec(r.line)} ${SK[r.k].l}${r.b.eo.v ? ' · ' + dec(r.b.eo.v, 2) : ''}</div></div>
         <div class="sp">${spark(r.spark, r.line, r.b.side)}<div class="xs mut">${(() => { const v = r.spark, ok = v.filter(x => r.b.side === 'under' ? x < r.line : x > r.line).length; return `${ok}/${v.length} últimos`; })()}</div></div>
-        <div class="rt"><div class="pc ${r.b.p >= .6 ? 'hi' : ''}">${pct(r.b.p)}</div><div class="xs ${valCls(r.b.edge)}">${valTxt(r.b.edge)}</div></div>
+        <div class="rt"><div class="pc ${r.b.p >= .6 ? 'hi' : ''}">${pct(r.b.p)}</div><div class="xs ${valCls(r.b.edge)}">${valTxt(r.b.edge, r.b.chk)}</div></div>
         </button>${star(r)}</div>` : `<div class="prow-w"><button class="prow" data-open-g="${esc(r.g.id)}" data-open-m="${r.m}" data-open-t="${r.tm === r.g.home ? 'home' : 'away'}">
         <div style="min-width:0"><div class="nm">${esc(marketLabel(r.g, r.m, r.tm, r.side, r.line))}</div><div class="mut xs">${r.g.away} @ ${r.g.home} · ${MARKET_N[r.m]}${r.ev.eo.v ? ' · ' + dec(r.ev.eo.v, 2) : ''}</div></div>
-        <div class="rt"><div class="pc ${r.ev.pModel >= .6 ? 'hi' : ''}">${pct(r.ev.pModel)}</div><div class="xs ${valCls(r.ev.edge)}">${valTxt(r.ev.edge)}</div></div></button>${star(r)}</div>`).join('')
+        <div class="rt"><div class="pc ${r.ev.pModel >= .6 ? 'hi' : ''}">${pct(r.ev.pModel)}</div><div class="xs ${valCls(r.ev.edge)}">${valTxt(r.ev.edge, r.ev.chk)}</div></div></button>${star(r)}</div>`).join('')
       : all.length ? `<div class="empty"><b>Ninguna con estos filtros</b>Quita alguno para ver más.</div>` : `<div class="empty"><b>Aún no hay cuotas cargadas hoy</b>${isAdmin ? 'Cárgalas en la pestaña Cuotas.' : 'El administrador las cargará antes de los partidos.'}</div>`}</div>
     ${legal()}</div>`;
 }
