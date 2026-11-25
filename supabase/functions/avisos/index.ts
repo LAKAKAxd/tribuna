@@ -186,7 +186,8 @@ if (typeof Deno !== 'undefined') Deno.serve(async req => {
   let enviadosAhora = 0; const nuevas = [];
   // bienvenida a los móviles recién activados (sirve de prueba)
   for (const s of subs) { const k = `hola:${s.endpoint.slice(-40)}`; if (ya.has(k)) continue; const t = T[s.lang] || T.es;
-    if (await send(s, { title: t.hello, body: t.helloBody, tag: 'hola' })) enviadosAhora++; nuevas.push({ clave: k }); }
+    // Fecha lejana: así entra siempre en «enviados» (solo se leen los de 7 días) y la limpieza de 14 días no la borra.
+    if (await send(s, { title: t.hello, body: t.helloBody, tag: 'hola' })) enviadosAhora++; nuevas.push({ clave: k, enviado: '2099-01-01T00:00:00Z' }); }
   // apuestas de hoy y de ayer (EE. UU.)
   for (const r of bets.data || []) {
     const b = { ...r.data, id: r.id };
@@ -195,7 +196,7 @@ if (typeof Deno !== 'undefined') Deno.serve(async req => {
     let avisos;
     try { avisos = await noticesFor(b, moneda[r.user_id], mine[0]?.lang || 'es'); } catch (e) { console.warn('apuesta', b.id, e.message); continue; }
     for (const a of avisos) {
-      if (ya.has(a.clave)) continue; ya.add(a.clave); nuevas.push({ clave: a.clave });
+      if (ya.has(a.clave)) continue; ya.add(a.clave); nuevas.push({ clave: a.clave, enviado: new Date().toISOString() });   // todas con fecha: upsert pone null en lo que falte
       for (const s of mine) { const t = await noticesFor(b, moneda[r.user_id], s.lang).then(x => x.find(y => y.clave === a.clave)).catch(() => a);
         if (await send(s, { title: (t || a).title, body: (t || a).body, tag: a.clave })) enviadosAhora++; }
     }
